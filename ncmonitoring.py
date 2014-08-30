@@ -1,9 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
+# -*- coding: utf8 -*-
 
 import curses
 import time
 from subprocess import check_output
 import uptime
+import netifaces
 
 
 class Frame:
@@ -42,7 +44,7 @@ class Frame:
             self._borderwindow.addstr(0, 1, self._title)
 
         self._contentwindow.clear()
-        content = self._content(self._height, self._width)
+        content = self._content(self._content_height, self._content_width)
         content = content.split("\n")
         for i in range(len(content)):
             if i < self._content_height - 1 \
@@ -88,7 +90,6 @@ def get_date(height, width):
 
 def get_load(height, width):
     output = check_output(["uptime"])
-    output = output.decode('utf8')
     load = output.split("load average:")[1].strip()
     load = load.split(',')
     load = map(str.strip, load)
@@ -122,7 +123,6 @@ def get_df(height, width, mountpoints=['/']):
         size = output[1]
         used = output[2]
         percent = output[4]
-        # size, used, percent = output
         percent = int(percent[:-1])
 
         percent = int(percent * graph_width / 100)
@@ -177,13 +177,50 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         line += 1
 
 
-def get_uptime(heigth, window):
+def get_uptime(heigth, width):
     utime = uptime.uptime()
     utime = int(utime)
     minutes, seconds = divmod(utime, 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
-    return "%3i Days %02i:%02i" % (days, hours, minutes)
+    return "%3i days %02i:%02i" % (days, hours, minutes)
+
+
+def get_ip(heigth, width, interface='eth0'):
+    ip_list = netifaces.ifaddresses(interface)
+    ret_val = []
+
+    try:
+        ip = ip_list[netifaces.AF_INET]
+        ip = ip[0]
+        ip = ip['addr']
+        ret_val.append(ip[-width:])
+    except KeyError:
+        ret_val.append("")
+
+    try:
+        ip = ip_list[netifaces.AF_INET6]
+        ip = ip[0]
+        ip = ip['addr']
+        ret_val.append(ip[-width:])
+    except KeyError:
+        ret_val.append("")
+
+    return "\n".join(ret_val)
+
+
+def draw_hddtemp(window, heigth, width, devices=["/dev/sda"]):
+    ret_val = []
+    line = 0
+    for dev in devices:
+        temp = check_output(["hddtemp", "--numeric", "--unit=C", dev])
+        temp = float(temp)
+        window.addstr(line, 0, dev)
+        window.addstr(line, 10, "%3.0f°C" % temp)
+        line += 1
+        # ret_val.append("--".join([device, name, device]))
+
+    # return "\n".join(ret_val)
 
 
 if __name__ == "__main__":
@@ -223,15 +260,17 @@ if __name__ == "__main__":
     utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
     # iotop
     # vnstat
-    # hddtem
+    # # hddtem
+    hddtemp = ColoredFrame(6, 31, 11, 0, lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]), "hddtemp")
     # sensors
     # raidstatus
     # smart status
     # ip
+    ip = Frame(4, 42, 0, 35, lambda y, x: get_ip(y, x, "em1"), "ip")
     # uname
     # (ftp-status)
     test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime]
+    frames = [date, load, df, utime, ip, hddtemp]
 
     while True:
         for frame in frames:
