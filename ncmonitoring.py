@@ -29,8 +29,6 @@ class Frame:
             self._content_height = height - 2
             self._content_width = width - 2
             self._borderwindow = curses.newwin(height, width, pos_y, pos_x)
-            self._borderwindow.border()
-            self._borderwindow.addstr(0, 1, title)
             self._contentwindow = curses.newwin(self._content_height,
                                                 self._content_width,
                                                 pos_y + 1,
@@ -38,6 +36,10 @@ class Frame:
             self.update()
 
     def update(self, refresh=True):
+        if self._borderwindow:
+            self._borderwindow.border()
+            self._borderwindow.addstr(0, 1, self._title)
+
         self._contentwindow.clear()
         content = self._content(self._height, self._width)
         content = content.split("\n")
@@ -59,6 +61,10 @@ class Frame:
 
 class ColoredFrame(Frame):
     def update(self, refresh=True):
+        if self._borderwindow:
+            self._borderwindow.border()
+            self._borderwindow.addstr(0, 1, self._title)
+
         self._contentwindow.clear()
         self._content(self._contentwindow,
                       self._content_height, self._content_width)
@@ -106,12 +112,14 @@ def get_df(height, width, mountpoints=['/']):
     graph_width = 50
     ret_val = []
     for mount in mountpoints:
-        output = check_output(["df", mount,
-                               "--output=size,used,pcent", "-h"])
+        output = check_output(["df", mount, "-h"])
         output = output.decode('utf8')
         output = output.split("\n")[1]
         output = output.split()
-        size, used, percent = output
+        size = output[1]
+        used = output[2]
+        percent = output[4]
+        # size, used, percent = output
         percent = int(percent[:-1])
 
         percent = int(percent * graph_width / 100)
@@ -126,16 +134,17 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
     graph_width = 50
     graph_warning = 40
     graph_critical = 45
-    mountname_length = 20
+    mountname_length = 15
 
     line = 0
     for mount in mountpoints:
-        output = check_output(["df", mount,
-                               "--output=size,used,pcent", "-h"])
+        output = check_output(["df", mount, "-h"])
         output = output.decode('utf8')
         output = output.split("\n")[1]
         output = output.split()
-        size, used, percent = output
+        size = output[1]
+        used = output[2]
+        percent = output[4]
         percent = int(percent[:-1])
         percent = int(percent * graph_width / 100)
         graph = "|" * percent
@@ -189,9 +198,9 @@ if __name__ == "__main__":
     # load
     load = ColoredFrame(3, 19, 0, 0, draw_load, "load")
     # date
-    date = Frame(3, 21, 0, 24, get_date, "date")
+    date = Frame(3, 21, 0, 59, get_date, "date")
     # df
-    df = ColoredFrame(8, 90, 3, 0,
+    df = ColoredFrame(8, 80, 3, 0,
                       lambda w, y, x: draw_df(w, y, x, ["/",
                                                         "/home",
                                                         "/usr",
@@ -208,8 +217,8 @@ if __name__ == "__main__":
     # ip
     # uname
     # (ftp-status)
-    test = Frame(3, 12, 20, 20, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, test]
+    test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
+    frames = [date, load, df]
 
     while True:
         for frame in frames:
