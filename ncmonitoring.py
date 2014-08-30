@@ -3,6 +3,7 @@
 import curses
 import time
 from subprocess import check_output
+import uptime
 
 
 class Frame:
@@ -46,7 +47,8 @@ class Frame:
         for i in range(len(content)):
             if i < self._content_height - 1 \
                     or len(content[i]) < self._content_width:
-                self._contentwindow.addstr(i, 0, content[i])
+                self._contentwindow.addstr(i, 0,
+                                           content[i][:self._content_width])
             else:
                 self._contentwindow.addstr(i, 0, content[i][-1:])
                 self._contentwindow.insstr(i, 0, content[i][:-1])
@@ -62,6 +64,7 @@ class Frame:
 class ColoredFrame(Frame):
     def update(self, refresh=True):
         if self._borderwindow:
+            # self._borderwindow.clear()
             self._borderwindow.border()
             self._borderwindow.addstr(0, 1, self._title)
 
@@ -174,6 +177,15 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         line += 1
 
 
+def get_uptime(heigth, window):
+    utime = uptime.uptime()
+    utime = int(utime)
+    minutes, seconds = divmod(utime, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    return "%3i Days %02i:%02i" % (days, hours, minutes)
+
+
 if __name__ == "__main__":
     print(get_load(1, 2))
     # start
@@ -208,6 +220,7 @@ if __name__ == "__main__":
                                                         "/tmp"]),
                       "df")
     # uptime
+    utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
     # iotop
     # vnstat
     # hddtem
@@ -218,7 +231,7 @@ if __name__ == "__main__":
     # uname
     # (ftp-status)
     test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df]
+    frames = [date, load, df, utime]
 
     while True:
         for frame in frames:
