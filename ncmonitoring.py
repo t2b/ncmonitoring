@@ -6,55 +6,62 @@ from subprocess import check_output
 
 
 class Frame:
-    borderwindow = None
-    contentwindow = None
-    content = None
-    title = None
-    height = 0
-    width = 0
-    content_height = 0
-    content_width = 0
+    _borderwindow = None
+    _contentwindow = None
+    _content = None
+    _title = None
+    _height = 0
+    _width = 0
+    _content_height = 0
+    _content_width = 0
 
     def __init__(self, height, width, pos_y, pos_x, content, title=None):
-        self.height = height
-        self.width = width
-        self.content = content
+        self._height = height
+        self._width = width
+        self._content = content
         if title is None:
-            self.borderwindow = None
-            self.contentwindow = curses.newwin(height, width, pos_y, pos_x)
-            self.content_height = height
-            self.content_width = width
+            self._borderwindow = None
+            self._contentwindow = curses.newwin(height, width, pos_y, pos_x)
+            self._content_height = height
+            self._content_width = width
         else:
-            self.title = title
-            self.content_height = height - 2
-            self.content_width = width - 2
-            self.borderwindow = curses.newwin(height, width, pos_y, pos_x)
-            self.borderwindow.border()
-            self.borderwindow.addstr(0, 1, title)
-            self.contentwindow = curses.newwin(self.content_height,
-                                               self.content_width,
-                                               pos_y + 1,
-                                               pos_x + 1)
-        self.update()
+            self._title = title
+            self._content_height = height - 2
+            self._content_width = width - 2
+            self._borderwindow = curses.newwin(height, width, pos_y, pos_x)
+            self._borderwindow.border()
+            self._borderwindow.addstr(0, 1, title)
+            self._contentwindow = curses.newwin(self._content_height,
+                                                self._content_width,
+                                                pos_y + 1,
+                                                pos_x + 1)
+            self.update()
 
     def update(self, refresh=True):
-        self.contentwindow.clear()
-        self.contentwindow.addstr(0, 0, self.content(self.content_height,
-                                                     self.content_width))
+        self._contentwindow.clear()
+        content = self._content(self._height, self._width)
+        content = content.split("\n")
+        for i in range(len(content)):
+            if i < self._content_height - 1 \
+                    or len(content[i]) < self._content_width:
+                self._contentwindow.addstr(i, 0, content[i])
+            else:
+                self._contentwindow.addstr(i, 0, content[i][-1:])
+                self._contentwindow.insstr(i, 0, content[i][:-1])
         if refresh:
             self.refresh()
 
     def refresh(self):
-        if self.borderwindow:
-            self.borderwindow.refresh()
-        self.contentwindow.refresh()
+        if self._borderwindow:
+            self._borderwindow.refresh()
+        self._contentwindow.refresh()
 
 
 class ColoredFrame(Frame):
     def update(self, refresh=True):
-        self.contentwindow.clear()
-        self.content(self.contentwindow,
-                     self.content_height, self.content_width)
+        self._contentwindow.clear()
+        self._content(self._contentwindow,
+                      self._content_height, self._content_width)
         if refresh:
             self.refresh()
 
@@ -90,11 +97,13 @@ def draw_load(window, height, width):
             color = yellow
         if load[i] > 4:
             color = red
-        window.addstr(0, i * 6, "%5.2f" % load[i], color)
+        value = "%5.2f" % load[i]
+        window.addstr(0, i * 6, value[-1:], color)
+        window.insstr(0, i * 6, value[:-1], color)
 
 
-def get_df(height, width, mountpoints='/'):
-    graph_width = 20
+def get_df(height, width, mountpoints=['/']):
+    graph_width = 50
     ret_val = []
     for mount in mountpoints:
         output = check_output(["df", mount,
@@ -108,8 +117,52 @@ def get_df(height, width, mountpoints='/'):
         percent = int(percent * graph_width / 100)
 
         graph = "[" + "|" * percent + " " * (graph_width - percent) + "]"
-        ret_val.append(" ".join([mount, graph, used + "/" + size]))
+        ret_val.append("{:<15} {:} {:>4}/{:<4}".format(mount, graph,
+                                                       used, size))
     return "\n".join(ret_val)
+
+
+def draw_df(window, heigth, width, mountpoints=["/"]):
+    graph_width = 50
+    graph_warning = 40
+    graph_critical = 45
+    mountname_length = 20
+
+    line = 0
+    for mount in mountpoints:
+        output = check_output(["df", mount,
+                               "--output=size,used,pcent", "-h"])
+        output = output.decode('utf8')
+        output = output.split("\n")[1]
+        output = output.split()
+        size, used, percent = output
+        percent = int(percent[:-1])
+        percent = int(percent * graph_width / 100)
+        graph = "|" * percent
+
+        window.addstr(line,
+                      0,
+                      mount[-mountname_length:])
+        window.addstr(line,
+                      mountname_length + 1,
+                      '[')
+        window.addstr(line,
+                      mountname_length + 2,
+                      graph[:graph_warning], green)
+        window.addstr(line,
+                      mountname_length + 2 + graph_warning,
+                      graph[graph_warning:graph_critical], yellow)
+        window.addstr(line,
+                      mountname_length + 2 + graph_critical,
+                      graph[graph_critical:], red)
+        window.addstr(line,
+                      mountname_length + 2 + graph_width,
+                      ']')
+        window.addstr(line,
+                      mountname_length + 2 + graph_width + 2,
+                      "{:>4}/{:<4}".format(used, size))
+
+        line += 1
 
 
 if __name__ == "__main__":
@@ -133,13 +186,30 @@ if __name__ == "__main__":
     curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
     red = curses.color_pair(3)
 
-    date = Frame(3, 22, 0, 24, get_date, "date")
-    load = Frame(3, 24, 0, 0, get_load, "load")
-    cload = ColoredFrame(3, 24, 0, 46, draw_load, "load")
-    df = Frame(10, 50, 3, 0,
-               lambda x, y: get_df(x, y, ["/", "/home", "/usr", "/var"]),
-               "df")
-    frames = [date, load, df, cload]
+    # load
+    load = ColoredFrame(3, 19, 0, 0, draw_load, "load")
+    # date
+    date = Frame(3, 21, 0, 24, get_date, "date")
+    # df
+    df = ColoredFrame(8, 90, 3, 0,
+                      lambda w, y, x: draw_df(w, y, x, ["/",
+                                                        "/home",
+                                                        "/usr",
+                                                        "/var",
+                                                        "/tmp"]),
+                      "df")
+    # uptime
+    # iotop
+    # vnstat
+    # hddtem
+    # sensors
+    # raidstatus
+    # smart status
+    # ip
+    # uname
+    # (ftp-status)
+    test = Frame(3, 12, 20, 20, lambda y, x: "1234567890", "test")
+    frames = [date, load, df, test]
 
     while True:
         for frame in frames:
