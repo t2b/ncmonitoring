@@ -130,32 +130,37 @@ def draw_load(window, height, width):
         window.insstr(0, i * 6, value[:-1], color)
 
 
-def get_df(height, width, mountpoints=['/']):
-    graph_width = 50
-    ret_val = []
-    for mount in mountpoints:
-        output = check_output(["df", mount, "-h"])
-        output = output.decode('utf8')
-        output = output.split("\n")[1]
-        output = output.split()
-        size = output[1]
-        used = output[2]
-        percent = output[4]
-        percent = int(percent[:-1])
+def __draw_bar(window, pos_y, pos_x,
+               length, value, warning=None, critical=None, sign="|"):
+    if critical is None:
+        critical = int(length * 0.9)
+        if length > 1 and critical == length:
+            critical = length - 1
 
-        percent = int(percent * graph_width / 100)
+    if warning is None:
+        warning = int(length * 0.8)
+        if critical > 1 and warning >= critical:
+            warning = critical - 1
 
-        graph = "[" + "|" * percent + " " * (graph_width - percent) + "]"
-        ret_val.append("{:<15} {:} {:>4}/{:<4}".format(mount, graph,
-                                                       used, size))
-    return "\n".join(ret_val)
+    graph = sign * value
+    window.addstr(pos_y,
+                  pos_x,
+                  graph[:warning], green)
+    window.addstr(pos_y,
+                  pos_x + warning,
+                  graph[warning:critical], yellow)
+    window.addstr(pos_y,
+                  pos_x + critical,
+                  graph[critical:], red)
 
 
 def draw_df(window, heigth, width, mountpoints=["/"]):
-    graph_width = 50
-    graph_warning = 40
-    graph_critical = 45
-    mountname_length = 15
+    # 80
+    if width < 40:
+        mountname_length = int(width - 12) / 2
+    else:
+        mountname_length = 15
+    graph_width = width - mountname_length - 13
 
     line = 0
     for mount in mountpoints:
@@ -168,7 +173,6 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         percent = output[4]
         percent = int(percent[:-1])
         percent = int(percent * graph_width / 100)
-        graph = "|" * percent
 
         window.addstr(line,
                       0,
@@ -176,15 +180,8 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         window.addstr(line,
                       mountname_length + 1,
                       '[')
-        window.addstr(line,
-                      mountname_length + 2,
-                      graph[:graph_warning], green)
-        window.addstr(line,
-                      mountname_length + 2 + graph_warning,
-                      graph[graph_warning:graph_critical], yellow)
-        window.addstr(line,
-                      mountname_length + 2 + graph_critical,
-                      graph[graph_critical:], red)
+        __draw_bar(window, line, mountname_length + 2,
+                   graph_width, graph_width)
         window.addstr(line,
                       mountname_length + 2 + graph_width,
                       ']')
@@ -232,12 +229,15 @@ def draw_hddtemp(window, heigth, width, devices=["/dev/sda"]):
     for dev in devices:
         temp = check_output(["hddtemp", "--numeric", "--unit=C", dev])
         temp = float(temp)
+        temp_str = "%2.0f°C" % temp
         window.addstr(line, 0, dev)
-        window.addstr(line, 10, "%3.0f°C" % temp)
+        color = green
+        if 40 <= temp < 50:
+            color = yellow
+        if temp >= 50:
+            color = red
+        window.insstr(line, 10, temp_str, color)
         line += 1
-        # ret_val.append("--".join([device, name, device]))
-
-    # return "\n".join(ret_val)
 
 
 def __netstat(device):
@@ -270,23 +270,22 @@ def __netstat(device):
         yield (rx_speed, tx_speed)
 
 
-def get_netstat(height, width, device):
-    netstat_generator = __netstat(device)
-    while True:
-        rx_speed, tx_speed = netstat_generator.next()
-        rx_speed = rx_speed / 1000**2
-        tx_speed = tx_speed / 1000**2
-        yield "rx: %6.1f Mbit/s\ntx: %6.1f Mbit/s" % (rx_speed, tx_speed)
-
-
 def draw_netstat(window, height, width, device):
     netstat_generator = __netstat(device)
     while True:
         rx_speed, tx_speed = netstat_generator.next()
         rx_speed = rx_speed / 1000**2
         tx_speed = tx_speed / 1000**2
-        window.addstr(0, 0, "rx: %6.1f Mbit/s" % rx_speed)
-        window.addstr(1, 0, "tx: %6.1f Mbit/s" % tx_speed)
+
+        window.addstr(0, 0, "rx: [")
+        __draw_bar(window, 0, 5,
+                   20, int(round(20 * rx_speed / 1000)), 15, 18)
+        window.insstr(0, 25, "] %6.1f Mbit/s" % rx_speed)
+
+        window.addstr(1, 0, "tx: [")
+        __draw_bar(window, 1, 5,
+                   20, int(round(20 * tx_speed / 1000)), 15, 18)
+        window.insstr(1, 25, "] %6.1f Mbit/s" % tx_speed)
         yield None
 
 
@@ -327,14 +326,11 @@ if __name__ == "__main__":
     utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
     # iotop
     # vnstat
-    nstat = GeneratorFrame(4, 19, 11, 31,
-                           lambda y, x: get_netstat(y, x, "/sys/class/net/em1"),
-                           "em1")
-    cnstat = ColorGeneratorFrame(4, 20, 21, 31,
+    nstat = ColorGeneratorFrame(4, 60, 21, 0,
                                  lambda w, y, x: draw_netstat(w, y, x, "/sys/class/net/em1"),
                                  "em1")
     # # hddtem
-    hddtemp = ColorFrame(6, 31, 11, 0,
+    hddtemp = ColorFrame(6, 16, 11, 0,
                          lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]),
                          "hddtemp")
     # sensors
@@ -346,7 +342,7 @@ if __name__ == "__main__":
     # vmstat/mem
     # (ftp-status)
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, hddtemp, nstat, cnstat]
+    frames = [date, load, df, utime, ip, hddtemp, nstat, nstat]
 
     while True:
         for frame in frames:
