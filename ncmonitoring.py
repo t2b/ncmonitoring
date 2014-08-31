@@ -151,7 +151,7 @@ def __draw_bar(window, pos_y, pos_x,
                   graph[warning:critical], yellow)
     window.addstr(pos_y,
                   pos_x + critical,
-                  graph[critical:], red)
+                  graph[critical:length], red)
 
 
 def draw_df(window, heigth, width, mountpoints=["/"]):
@@ -181,7 +181,7 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
                       mountname_length + 1,
                       '[')
         __draw_bar(window, line, mountname_length + 2,
-                   graph_width, graph_width)
+                   graph_width, percent)
         window.addstr(line,
                       mountname_length + 2 + graph_width,
                       ']')
@@ -272,6 +272,7 @@ def __netstat(device):
 
 def draw_netstat(window, height, width, device):
     netstat_generator = __netstat(device)
+    graph_length = width - 22
     while True:
         rx_speed, tx_speed = netstat_generator.next()
         rx_speed = rx_speed / 1000**2
@@ -279,13 +280,56 @@ def draw_netstat(window, height, width, device):
 
         window.addstr(0, 0, "rx: [")
         __draw_bar(window, 0, 5,
-                   20, int(round(20 * rx_speed / 1000)), 15, 18)
-        window.insstr(0, 25, "] %6.1f Mbit/s" % rx_speed)
+                   graph_length, int(round(graph_length * rx_speed / 1000)))
+        window.insstr(0, 5 + graph_length, "] %6.1f Mbit/s" % rx_speed)
 
         window.addstr(1, 0, "tx: [")
         __draw_bar(window, 1, 5,
-                   20, int(round(20 * tx_speed / 1000)), 15, 18)
-        window.insstr(1, 25, "] %6.1f Mbit/s" % tx_speed)
+                   graph_length, int(round(graph_length * tx_speed / 1000)))
+        window.insstr(1, 5 + graph_length, "] %6.1f Mbit/s" % tx_speed)
+        yield None
+
+
+def __iostat(device):
+    prev_timstamp = time.time()
+    with open(path.join(device, "stat")) as f:
+        output = f.read()
+    output = output.split()
+    prev_read = int(output[2])
+    prev_write = int(output[6])
+
+    while True:
+        timestamp = time.time()
+        with open(path.join(device, "stat")) as f:
+            output = f.read()
+        output = output.split()
+        read = int(output[2])
+        write = int(output[6])
+        read_speed = (read - prev_read) / (timestamp - prev_timstamp) * 512
+        write_speed = (write - prev_write) / (timestamp - prev_timstamp) * 512
+        prev_timstamp = timestamp
+        prev_read = read
+        prev_write = write
+        yield (read_speed, write_speed)
+
+
+def draw_iostat(window, height, width, device):
+    iostat_generator = __iostat(device)
+    graph_length = width - 22
+    while True:
+        read_speed, write_speed = iostat_generator.next()
+        read_speed = read_speed / 1000**2
+        write_speed = write_speed / 1000**2
+
+        window.addstr(0, 0, "read:  [")
+        __draw_bar(window, 0, 8,
+                   graph_length, int(round(graph_length * read_speed / 100)))
+        window.insstr(0, 8 + graph_length, "] %5.1f MB/s" % read_speed)
+
+        window.addstr(1, 0, "write: [")
+        __draw_bar(window, 1, 8,
+                   graph_length, int(round(graph_length * write_speed / 100)))
+        window.insstr(1, 8 + graph_length, "] %5.1f MB/s" % write_speed)
         yield None
 
 
@@ -325,10 +369,13 @@ if __name__ == "__main__":
     # uptime
     utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
     # iotop
+    iostat = ColorGeneratorFrame(4, 60, 25, 0,
+                                 lambda w, y, x: draw_iostat(w, y, x, "/sys/class/block/sdb"),
+                                 "sdb")
     # vnstat
     nstat = ColorGeneratorFrame(4, 60, 21, 0,
-                                 lambda w, y, x: draw_netstat(w, y, x, "/sys/class/net/em1"),
-                                 "em1")
+                                lambda w, y, x: draw_netstat(w, y, x, "/sys/class/net/em1"),
+                                "em1")
     # # hddtem
     hddtemp = ColorFrame(6, 16, 11, 0,
                          lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]),
@@ -342,7 +389,7 @@ if __name__ == "__main__":
     # vmstat/mem
     # (ftp-status)
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, hddtemp, nstat, nstat]
+    frames = [date, load, df, utime, ip, nstat, nstat, iostat]
 
     while True:
         for frame in frames:
