@@ -15,13 +15,16 @@ print
 print("ip")
 print(ncm.get_ip(3, 19, "em1"))
 
+print
+print "sensors"
+print ncm.get_sensors(1, 2)
 
 # netstat = ncm.get_netstat(13, 14, "/sys/class/net/em1/")
 # for _ in range(150):
 #     print netstat.next(1, 3)
 #     time.sleep(.1)
 
-iostat = ncm.iostat("/sys/class/block/sdb")
-for _ in range(150):
-    print iostat.next()
-    time.sleep(1)
+# iostat = ncm.iostat("/sys/class/block/sdb")
+# for _ in range(150):
+#     print iostat.next()
+#     time.sleep(1)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf8 -*-
 
+execfile("env/bin/activate_this.py", dict(__file__="env/bin/activate_this.py"))
+
 import curses
 import time
 from subprocess import check_output
@@ -42,6 +44,7 @@ class Frame:
 
     def update(self, refresh=True):
         if self._borderwindow:
+            self._borderwindow.clear()
             self._borderwindow.border()
             self._borderwindow.addstr(0, 1, self._title)
 
@@ -347,6 +350,26 @@ def draw_iostat(window, height, width, device):
         yield None
 
 
+def draw_sensors(window, height, width):
+    import subprocess
+    output = check_output(["sensors", "-u"], stderr=subprocess.STDOUT)
+    # output = output.decode("utf8")
+    output = output.split("\n")
+    sensor = dict()
+    for line in output:
+        if line[:8] == "  temp1_":
+            line = line.split(": ")
+            sensor[line[0][8:]] = float(line[1])
+    color = green
+    if sensor["input"] >= sensor["max"]:
+        color = yellow
+    if sensor["input"] >= sensor["crit"]:
+        color = red
+    window.addstr(0, 0, "CPU")
+    window.insstr(0, 4, "%3.0fC" % sensor["input"], color)
+    # return "CPU %5.1f°C" % (sensor["input"])
+
+
 if __name__ == "__main__":
     print(get_load(1, 2))
     # start
@@ -395,15 +418,17 @@ if __name__ == "__main__":
                          lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]),
                          "hddtemp")
     # sensors
+    sensors = ColorFrame(3, 10, 0, 39, draw_sensors, "temp")
     # raidstatus
     # smart status
     # ip
-    ip = Frame(4, 42, 0, 35, lambda y, x: get_ip(y, x, "em1"), "ip")
+    ip = Frame(4, 42, 11, 16, lambda y, x: get_ip(y, x, "em1"), "ip")
     # uname
     # vmstat/mem
+    # virsh list
     # (ftp-status)
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp]
+    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp, sensors]
 
     while True:
         for frame in frames:
