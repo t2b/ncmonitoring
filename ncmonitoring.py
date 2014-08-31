@@ -5,11 +5,13 @@ execfile("env/bin/activate_this.py", dict(__file__="env/bin/activate_this.py"))
 
 import curses
 import time
+import subprocess
 from subprocess import check_output
 import uptime
 import netifaces
 from os import path
 from telnetlib import Telnet
+from srmqt4 import mdstat
 
 
 class Frame:
@@ -44,11 +46,11 @@ class Frame:
 
     def update(self, refresh=True):
         if self._borderwindow:
-            self._borderwindow.clear()
+            # self._borderwindow.clear()
             self._borderwindow.border()
             self._borderwindow.addstr(0, 1, self._title)
 
-        self._contentwindow.clear()
+        # self._contentwindow.clear()
         content = self._content(self._content_height, self._content_width)
         content = content.split("\n")
         for i in range(len(content)):
@@ -75,7 +77,7 @@ class ColorFrame(Frame):
             self._borderwindow.border()
             self._borderwindow.addstr(0, 1, self._title)
 
-        self._contentwindow.clear()
+        # self._contentwindow.clear()
         self._content(self._contentwindow,
                       self._content_height, self._content_width)
         if refresh:
@@ -124,11 +126,11 @@ def draw_load(window, height, width):
     load = list(map(float, load))
 
     for i in range(len(load)):
-        color = green
+        color = color_green
         if load[i] > 2:
-            color = yellow
+            color = color_yellow
         if load[i] > 4:
-            color = red
+            color = color_red
         value = "%5.2f" % load[i]
         window.addstr(0, i * 6, value[-1:], color)
         window.insstr(0, i * 6, value[:-1], color)
@@ -149,17 +151,16 @@ def __draw_bar(window, pos_y, pos_x,
     graph = sign * value
     window.addstr(pos_y,
                   pos_x,
-                  graph[:warning], green)
+                  graph[:warning], color_green)
     window.addstr(pos_y,
                   pos_x + warning,
-                  graph[warning:critical], yellow)
+                  graph[warning:critical], color_yellow)
     window.addstr(pos_y,
                   pos_x + critical,
-                  graph[critical:length], red)
+                  graph[critical:length], color_red)
 
 
 def draw_df(window, heigth, width, mountpoints=["/"]):
-    # 80
     if width < 40:
         mountname_length = int(width - 12) / 2
     else:
@@ -189,7 +190,7 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         window.addstr(line,
                       mountname_length + 2 + graph_width,
                       ']')
-        window.addstr(line,
+        window.insstr(line,
                       mountname_length + 2 + graph_width + 2,
                       "{:>4}/{:<4}".format(used, size))
 
@@ -244,16 +245,16 @@ def draw_hddtemp(window, heigth, width, devices=None):
         try:
             temp = float(hddtemp[2])
             if temp < 40:
-                color = green
+                color = color_green
             if 40 <= temp < 50:
-                color = yellow
+                color = color_yellow
             if temp > 50:
-                color = red
+                color = color_red
         except ValueError:
             pass
         window.addstr(line, 0, hddtemp[0][-9:])
-        window.addstr(line, 10, hddtemp[2][-3:], color)
-        window.addstr(line, 13, hddtemp[3][-1:], color)
+        window.addstr(line, 10, (" " + hddtemp[2])[-3:], color)
+        window.insstr(line, 13, hddtemp[3][-1:], color)
         line += 1
 
 
@@ -351,7 +352,6 @@ def draw_iostat(window, height, width, device):
 
 
 def draw_sensors(window, height, width):
-    import subprocess
     output = check_output(["sensors", "-u"], stderr=subprocess.STDOUT)
     # output = output.decode("utf8")
     output = output.split("\n")
@@ -360,17 +360,17 @@ def draw_sensors(window, height, width):
         if line[:8] == "  temp1_":
             line = line.split(": ")
             sensor[line[0][8:]] = float(line[1])
-    color = green
+    color = color_green
     if sensor["input"] >= sensor["max"]:
-        color = yellow
+        color = color_yellow
     if sensor["input"] >= sensor["crit"]:
-        color = red
+        color = color_red
     window.addstr(0, 0, "CPU")
     window.insstr(0, 4, "%3.0fC" % sensor["input"], color)
     # return "CPU %5.1f°C" % (sensor["input"])
 
 
-def get_virsh(heigth, width):
+def get_libvirt(heigth, width):
     output = check_output(["virsh", "list", "--all"])
     output = output.split("\n")
     output = output[2:]
@@ -379,9 +379,168 @@ def get_virsh(heigth, width):
         line = line.split()
         if len(line) < 3:
             continue
-        vm = "%15s %8s" % (line[1], line[2])
+        vm_name = line[1]
+        vm_state = " ".join(line[2:])
+        vm = "{:<15} {:<8}".format(vm_name, vm_state)
         ret_val.append(vm)
     return "\n".join(ret_val)
+
+
+def draw_mdstat(window, heigth, width):
+    status = mdstat.get_status()
+
+    # sample no raid
+    # status = {'personalities': '\n',
+    #           'devices': {},
+    #           'unused devices': '<none>\n'}
+
+    # sample active raid
+    # status = {'personalities': '[raid6] [raid5] [raid4] \n',
+    #           'devices': {'md0': {'read_only': '',
+    #                               'pers': 'raid5',
+    #                               'blocks': 8790405120,
+    #                               'raid': {'status': 'UUUU',
+    #                                        'algorithm': '2',
+    #                                        'level': '5',
+    #                                        'nondegraded': 4,
+    #                                        'chunk': '512k',
+    #                                        'total': 4,
+    #                                        'degraded': 0},
+    #                               'active': True,
+    #                               'resync': {'type': ''},
+    #                               'disks': {0: {'type': '',
+    #                                             'name': 'sdc'},
+    #                                         1: {'type': '',
+    #                                             'name': 'sdd'},
+    #                                         3: {'type': '',
+    #                                             'name': 'sde'},
+    #                                         4: {'type': '',
+    #                                             'name': 'sdb'}},
+    #                               'super': '1.2',
+    #                               'bitmap': {}
+    #                               }
+    #                       },
+    #           'unused devices': '<none>\n'}
+
+    # sample raid check
+    # status = {'personalities': '[raid6] [raid5] [raid4] \n',
+    #           'devices': {'md0': {'read_only': '',
+    #                               'pers': 'raid5',
+    #                               'blocks': 8790405120,
+    #                               'raid': {'status': 'UUUU',
+    #                                        'algorithm': '2',
+    #                                        'level': '5',
+    #                                        'nondegraded': 4,
+    #                                        'chunk': '512k',
+    #                                        'total': 4,
+    #                                        'degraded': 0},
+    #                               'active': True,
+    #                               'resync': {'finish': '560.3min',
+    #                                          'blocks': 1828880,
+    #                                          'max_blocks': 2930135040,
+    #                                          'percent': 0.0,
+    #                                          'type': 'check',
+    #                                          'speed': '87089K/sec'},
+    #                               'disks': {0: {'type': '',
+    #                                             'name': 'sdc'},
+    #                                         1: {'type': '',
+    #                                             'name': 'sdd'},
+    #                                         3: {'type': '',
+    #                                             'name': 'sde'},
+    #                                         4: {'type': '',
+    #                                             'name': 'sdb'}},
+    #                               'super': '1.2',
+    #                               'bitmap': {}
+    #                               }
+    #                       },
+    #           'unused devices': '<none>\n'}
+
+    # sample raid degraded
+    # status = {'personalities': '[raid6] [raid5] [raid4] \n',
+    #           'devices': {'md0': {'read_only': '',
+    #                               'pers': 'raid5',
+    #                               'blocks': 8790405120,
+    #                               'raid': {'status': 'UU_U',
+    #                                        'algorithm': '2',
+    #                                        'level': '5',
+    #                                        'nondegraded': 3,
+    #                                        'chunk': '512k',
+    #                                        'total': 4,
+    #                                        'degraded': 1},
+    #                               'active': True,
+    #                               'resync': {'finish': '560.3min',
+    #                                          'blocks': 1828880,
+    #                                          'max_blocks': 2930135040,
+    #                                          'percent': 0.0,
+    #                                          'type': 'resync',
+    #                                          'speed': '87089K/sec'},
+    #                               'disks': {0: {'type': '',
+    #                                             'name': 'sdc'},
+    #                                         1: {'type': '',
+    #                                             'name': 'sdd'},
+    #                                         3: {'type': '',
+    #                                             'name': 'sde'},
+    #                                         4: {'type': '',
+    #                                             'name': 'sdb'}},
+    #                               'super': '1.2',
+    #                               'bitmap': {}
+    #                               }
+    #                       },
+    #           'unused devices': '<none>\n'}
+
+    line = 0
+    for dev_name in status['devices']:
+        active = False
+        personality = ""
+        raid_status = ""
+        degraded = 0
+        resyc_type = ''
+        resyc_finish = ''
+
+        dev = status['devices'][dev_name]
+
+        if 'active' in dev:
+            active = dev['active']
+
+        if 'pers' in dev:
+            personality = dev['pers']
+
+        if 'raid' in dev:
+            raid_status_dict = dev['raid']
+
+            if 'status' in raid_status_dict:
+                raid_status = raid_status_dict['status']
+
+            if 'degraded' in raid_status_dict:
+                degraded = raid_status_dict['degraded']
+
+        if 'resync' in dev:
+            resync = dev['resync']
+
+            if 'type' in resync:
+                resyc_type = resync['type']
+
+            if 'finish' in resync:
+                resyc_finish = resync['finish']
+
+        if active:
+            active = "active"
+
+        color = color_default
+        if degraded > 0:
+            color = color_warning
+
+        main_status = "{:<5} {:<6} {:<6} {:<6} ".format(dev_name,
+                                                        active,
+                                                        personality,
+                                                        raid_status)
+        window.addstr(line, 0, main_status, color)
+
+        resync_status = "{:<7} {:>9}".format(resyc_type, resyc_finish)
+        if color == color_default:
+            color = color_yellow
+        window.insstr(line, 27, resync_status, color)
+        line += 0
 
 
 if __name__ == "__main__":
@@ -396,54 +555,70 @@ if __name__ == "__main__":
     stdscr.keypad(True)
     curses.start_color()
 
+    color_default = curses.color_pair(0)
+
     curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    green = curses.color_pair(1)
+    color_green = curses.color_pair(1)
 
     curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-    yellow = curses.color_pair(2)
+    color_yellow = curses.color_pair(2)
 
     curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
-    red = curses.color_pair(3)
+    color_red = curses.color_pair(3)
+
+    curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)
+    color_warning = curses.color_pair(4)
 
     # load
-    load = ColorFrame(3, 19, 0, 0, draw_load, "load")
+    load = ColorFrame(3, 19, 4, 0, draw_load, "load")
     # date
     date = Frame(3, 21, 0, 59, get_date, "date")
     # df
-    df = ColorFrame(8, 80, 3, 0,
+    df = ColorFrame(5, 55, 7, 0,
                     lambda w, y, x: draw_df(w, y, x, ["/",
                                                       "/home",
-                                                      "/usr",
-                                                      "/var",
                                                       "/tmp"]),
                     "df")
     # uptime
-    utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
+    utime = Frame(3, 16, 0, 0, get_uptime, "uptime")
     # iotop
-    iostat = ColorGeneratorFrame(4, 60, 17, 0,
-                                 lambda w, y, x: draw_iostat(w, y, x, "/sys/class/block/sdb"),
+    __iostat_dev = "/sys/class/block/sdb"
+    iostat = ColorGeneratorFrame(4, 64, 16, 16,
+                                 lambda w, y, x: draw_iostat(w,
+                                                             y,
+                                                             x,
+                                                             __iostat_dev),
                                  "sdb")
     # vnstat
-    nstat = ColorGeneratorFrame(4, 60, 21, 0,
-                                lambda w, y, x: draw_netstat(w, y, x, "/sys/class/net/em1"),
+    __nstat_dev = "/sys/class/net/em1"
+    nstat = ColorGeneratorFrame(4, 64, 12, 16,
+                                lambda w, y, x: draw_netstat(w,
+                                                             y,
+                                                             x,
+                                                             __nstat_dev),
                                 "em1")
     # # hddtem
-    hddtemp = ColorFrame(6, 16, 11, 0,
+    hddtemp = ColorFrame(6, 16, 12, 0,
                          lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]),
                          "hddtemp")
     # sensors
-    sensors = ColorFrame(3, 10, 0, 39, draw_sensors, "temp")
+    sensors = ColorFrame(3, 10, 18, 0, draw_sensors, "temp")
     # raidstatus
+    raid = ColorFrame(3, 46, 22, 34, draw_mdstat, "mdadm")
     # smart status
     # ip
-    ip = Frame(4, 42, 11, 16, lambda y, x: get_ip(y, x, "em1"), "ip")
+    ip = Frame(4, 42, 0, 16, lambda y, x: get_ip(y, x, "em1"), "ip")
     # uname
     # vmstat/mem
     # virsh list
-    virsh = Frame(5, 25, 25, 0, get_virsh, "vm")
+    libvirt = Frame(5, 25, 7, 55, get_libvirt, "libvirt")
     # (ftp-status)
+
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp, sensors, virsh]
+    # test.update()
+
+    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp,
+              sensors, libvirt, raid]
 
     while True:
         for frame in frames:

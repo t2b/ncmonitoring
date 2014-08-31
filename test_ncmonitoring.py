@@ -16,8 +16,12 @@ print("ip")
 print(ncm.get_ip(3, 19, "em1"))
 
 print
-print "virsh"
-print ncm.get_virsh(1, 2)
+print "libvirt"
+print ncm.get_libvirt(1, 2)
+
+# print
+# print "mdstat"
+# print ncm.get_mdstat(1, 2)
 
 # netstat = ncm.get_netstat(13, 14, "/sys/class/net/em1/")
 # for _ in range(150):
