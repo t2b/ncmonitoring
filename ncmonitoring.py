@@ -7,6 +7,7 @@ from subprocess import check_output
 import uptime
 import netifaces
 from os import path
+from telnetlib import Telnet
 
 
 class Frame:
@@ -224,19 +225,32 @@ def get_ip(heigth, width, interface='eth0'):
     return "\n".join(ret_val)
 
 
-def draw_hddtemp(window, heigth, width, devices=["/dev/sda"]):
+def draw_hddtemp(window, heigth, width, devices=None):
+    t = Telnet()
+    t.open("localhost", 7634)
+    output = t.read_all()
+    t.close()
+    t.close
+    seperator = '|'
+    output = output.split(seperator * 2)
+    output = map(lambda x: x.strip(seperator).split(seperator), output)
+
     line = 0
-    for dev in devices:
-        temp = check_output(["hddtemp", "--numeric", "--unit=C", dev])
-        temp = float(temp)
-        temp_str = "%2.0f°C" % temp
-        window.addstr(line, 0, dev)
-        color = green
-        if 40 <= temp < 50:
-            color = yellow
-        if temp >= 50:
-            color = red
-        window.insstr(line, 10, temp_str, color)
+    for hddtemp in output:
+        color = curses.color_pair(0)
+        try:
+            temp = float(hddtemp[2])
+            if temp < 40:
+                color = green
+            if 40 <= temp < 50:
+                color = yellow
+            if temp > 50:
+                color = red
+        except ValueError:
+            pass
+        window.addstr(line, 0, hddtemp[0][-9:])
+        window.addstr(line, 10, hddtemp[2][-3:], color)
+        window.addstr(line, 13, hddtemp[3][-1:], color)
         line += 1
 
 
@@ -389,7 +403,7 @@ if __name__ == "__main__":
     # vmstat/mem
     # (ftp-status)
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, nstat, nstat, iostat]
+    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp]
 
     while True:
         for frame in frames:
