@@ -16,8 +16,8 @@ print("ip")
 print(ncm.get_ip(3, 19, "em1"))
 
 print
-print "sensors"
-print ncm.get_sensors(1, 2)
+print "virsh"
+print ncm.get_virsh(1, 2)
 
 # netstat = ncm.get_netstat(13, 14, "/sys/class/net/em1/")
 # for _ in range(150):

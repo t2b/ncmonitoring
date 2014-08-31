@@ -370,6 +370,20 @@ def draw_sensors(window, height, width):
     # return "CPU %5.1f°C" % (sensor["input"])
 
 
+def get_virsh(heigth, width):
+    output = check_output(["virsh", "list", "--all"])
+    output = output.split("\n")
+    output = output[2:]
+    ret_val = []
+    for line in output:
+        line = line.split()
+        if len(line) < 3:
+            continue
+        vm = "%15s %8s" % (line[1], line[2])
+        ret_val.append(vm)
+    return "\n".join(ret_val)
+
+
 if __name__ == "__main__":
     print(get_load(1, 2))
     # start
@@ -406,7 +420,7 @@ if __name__ == "__main__":
     # uptime
     utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
     # iotop
-    iostat = ColorGeneratorFrame(4, 60, 25, 0,
+    iostat = ColorGeneratorFrame(4, 60, 17, 0,
                                  lambda w, y, x: draw_iostat(w, y, x, "/sys/class/block/sdb"),
                                  "sdb")
     # vnstat
@@ -426,9 +440,10 @@ if __name__ == "__main__":
     # uname
     # vmstat/mem
     # virsh list
+    virsh = Frame(5, 25, 25, 0, get_virsh, "vm")
     # (ftp-status)
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp, sensors]
+    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp, sensors, virsh]
 
     while True:
         for frame in frames:
