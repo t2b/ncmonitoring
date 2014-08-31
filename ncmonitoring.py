@@ -6,6 +6,7 @@ import time
 from subprocess import check_output
 import uptime
 import netifaces
+from os import path
 
 
 class Frame:
@@ -36,7 +37,7 @@ class Frame:
                                                 self._content_width,
                                                 pos_y + 1,
                                                 pos_x + 1)
-            self.update()
+            # self.update()
 
     def update(self, refresh=True):
         if self._borderwindow:
@@ -63,7 +64,7 @@ class Frame:
         self._contentwindow.refresh()
 
 
-class ColoredFrame(Frame):
+class ColorFrame(Frame):
     def update(self, refresh=True):
         if self._borderwindow:
             # self._borderwindow.clear()
@@ -75,6 +76,23 @@ class ColoredFrame(Frame):
                       self._content_height, self._content_width)
         if refresh:
             self.refresh()
+
+
+class GeneratorFrame(Frame):
+    _content_generator = None
+
+    def __init__(self, height, width, pos_y, pos_x, generator, title=None):
+        self._content_generator = generator(height, width)
+        Frame.__init__(self, height, width, pos_y, pos_x,
+                       lambda y, x: self._content_generator.next(), title)
+
+
+class ColorGeneratorFrame(ColorFrame, GeneratorFrame):
+    def __init__(self, height, width, pos_y, pos_x, generator, title=None):
+        GeneratorFrame.__init__(self, height, width, pos_y, pos_x,
+                                lambda y, x: None, title)
+        self._content_generator = generator(self._contentwindow, height, width)
+        self._content = lambda w, y, x: self._content_generator.next()
 
 
 def get_date(height, width):
@@ -210,7 +228,6 @@ def get_ip(heigth, width, interface='eth0'):
 
 
 def draw_hddtemp(window, heigth, width, devices=["/dev/sda"]):
-    ret_val = []
     line = 0
     for dev in devices:
         temp = check_output(["hddtemp", "--numeric", "--unit=C", dev])
@@ -221,6 +238,56 @@ def draw_hddtemp(window, heigth, width, devices=["/dev/sda"]):
         # ret_val.append("--".join([device, name, device]))
 
     # return "\n".join(ret_val)
+
+
+def __netstat(device):
+    prev_rx_timstamp = time.time()
+    prev_rx_bytes = 0
+    with open(path.join(device, "statistics/rx_bytes")) as f:
+        prev_rx_bytes = long(f.read())
+
+    prev_tx_timstamp = time.time()
+    prev_tx_bytes = 0
+    with open(path.join(device, "statistics/tx_bytes")) as f:
+        prev_tx_bytes = long(f.read())
+
+    while True:
+        rx_timestamp = time.time()
+        with open(path.join(device, "statistics/rx_bytes")) as f:
+            rx_bytes = long(f.read())
+        rx_speed = (rx_bytes - prev_rx_bytes) \
+            / (rx_timestamp - prev_rx_timstamp) * 8
+        prev_rx_timstamp = rx_timestamp
+        prev_rx_bytes = rx_bytes
+
+        tx_timestamp = time.time()
+        with open(path.join(device, "statistics/tx_bytes")) as f:
+            tx_bytes = long(f.read())
+        tx_speed = (tx_bytes - prev_tx_bytes) \
+            / (tx_timestamp - prev_tx_timstamp) * 8
+        prev_tx_timstamp = tx_timestamp
+        prev_tx_bytes = tx_bytes
+        yield (rx_speed, tx_speed)
+
+
+def get_netstat(height, width, device):
+    netstat_generator = __netstat(device)
+    while True:
+        rx_speed, tx_speed = netstat_generator.next()
+        rx_speed = rx_speed / 1000**2
+        tx_speed = tx_speed / 1000**2
+        yield "rx: %6.1f Mbit/s\ntx: %6.1f Mbit/s" % (rx_speed, tx_speed)
+
+
+def draw_netstat(window, height, width, device):
+    netstat_generator = __netstat(device)
+    while True:
+        rx_speed, tx_speed = netstat_generator.next()
+        rx_speed = rx_speed / 1000**2
+        tx_speed = tx_speed / 1000**2
+        window.addstr(0, 0, "rx: %6.1f Mbit/s" % rx_speed)
+        window.addstr(1, 0, "tx: %6.1f Mbit/s" % tx_speed)
+        yield None
 
 
 if __name__ == "__main__":
@@ -245,32 +312,41 @@ if __name__ == "__main__":
     red = curses.color_pair(3)
 
     # load
-    load = ColoredFrame(3, 19, 0, 0, draw_load, "load")
+    load = ColorFrame(3, 19, 0, 0, draw_load, "load")
     # date
     date = Frame(3, 21, 0, 59, get_date, "date")
     # df
-    df = ColoredFrame(8, 80, 3, 0,
-                      lambda w, y, x: draw_df(w, y, x, ["/",
-                                                        "/home",
-                                                        "/usr",
-                                                        "/var",
-                                                        "/tmp"]),
-                      "df")
+    df = ColorFrame(8, 80, 3, 0,
+                    lambda w, y, x: draw_df(w, y, x, ["/",
+                                                      "/home",
+                                                      "/usr",
+                                                      "/var",
+                                                      "/tmp"]),
+                    "df")
     # uptime
     utime = Frame(3, 16, 0, 19, get_uptime, "uptime")
     # iotop
     # vnstat
+    nstat = GeneratorFrame(4, 19, 11, 31,
+                           lambda y, x: get_netstat(y, x, "/sys/class/net/em1"),
+                           "em1")
+    cnstat = ColorGeneratorFrame(4, 20, 21, 31,
+                                 lambda w, y, x: draw_netstat(w, y, x, "/sys/class/net/em1"),
+                                 "em1")
     # # hddtem
-    hddtemp = ColoredFrame(6, 31, 11, 0, lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]), "hddtemp")
+    hddtemp = ColorFrame(6, 31, 11, 0,
+                         lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]),
+                         "hddtemp")
     # sensors
     # raidstatus
     # smart status
     # ip
     ip = Frame(4, 42, 0, 35, lambda y, x: get_ip(y, x, "em1"), "ip")
     # uname
+    # vmstat/mem
     # (ftp-status)
-    test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    frames = [date, load, df, utime, ip, hddtemp]
+    # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
+    frames = [date, load, df, utime, ip, hddtemp, nstat, cnstat]
 
     while True:
         for frame in frames:
