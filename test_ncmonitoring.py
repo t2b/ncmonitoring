@@ -19,6 +19,10 @@ print
 print "libvirt"
 print ncm.get_libvirt(1, 2)
 
+print
+print "mem"
+print ncm.draw_mem(0, 1, 50)
+
 # print
 # print "mdstat"
 # print ncm.get_mdstat(1, 2)

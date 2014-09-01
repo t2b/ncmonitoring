@@ -12,6 +12,7 @@ import netifaces
 from os import path
 from telnetlib import Telnet
 from srmqt4 import mdstat
+import psutil
 
 
 class Frame:
@@ -51,6 +52,7 @@ class Frame:
             self._borderwindow.addstr(0, 1, self._title)
 
         # self._contentwindow.clear()
+        self.clear()
         content = self._content(self._content_height, self._content_width)
         content = content.split("\n")
         for i in range(len(content)):
@@ -69,6 +71,11 @@ class Frame:
             self._borderwindow.refresh()
         self._contentwindow.refresh()
 
+    def clear(self):
+        whitespaces = " " * self._content_width
+        for line in range(self._content_height):
+            self._contentwindow.insstr(line, 0, whitespaces)
+
 
 class ColorFrame(Frame):
     def update(self, refresh=True):
@@ -78,6 +85,7 @@ class ColorFrame(Frame):
             self._borderwindow.addstr(0, 1, self._title)
 
         # self._contentwindow.clear()
+        self.clear()
         self._content(self._contentwindow,
                       self._content_height, self._content_width)
         if refresh:
@@ -536,11 +544,56 @@ def draw_mdstat(window, heigth, width):
                                                         raid_status)
         window.addstr(line, 0, main_status, color)
 
-        resync_status = "{:<7} {:>9}".format(resyc_type, resyc_finish)
+        resyc_finish = resyc_finish.replace("min", "'")
+        resync_status = "{:<7} {:>8}".format(resyc_type, resyc_finish)
         if color == color_default:
             color = color_yellow
         window.insstr(line, 27, resync_status, color)
         line += 0
+
+
+def draw_mem(window, heigth, width):
+    graph_length = width - 7
+
+    memory = psutil.virtual_memory()
+
+    memory_graph = '|' * int(round(float(memory.used) / memory.total * graph_length))
+    memory_graph = memory_graph + ' ' * (graph_length - len(memory_graph))
+    memory_usage = str((memory.total - memory.available) / 1024**2) \
+        + "/" + str(memory.total / 1024**2) + "MB"
+    memory_graph = memory_graph[:-len(memory_usage)] + memory_usage
+
+    buffer_start = int(round(float(memory.total - memory.available) /
+                             memory.total * graph_length))
+    cashed_start = int(round(float(memory.total - memory.available + memory.buffers) /
+                             memory.total * graph_length))
+    free_start = int(round(float(memory.used) / memory.total * graph_length))
+
+    window.addstr(0, 0, "mem  [")
+    window.addstr(0, 6,
+                  memory_graph[:buffer_start], color_green)
+    window.addstr(0, 6 + buffer_start,
+                  memory_graph[buffer_start:cashed_start], color_blue)
+    window.addstr(0, 6 + cashed_start,
+                  memory_graph[cashed_start:free_start], color_yellow)
+    window.addstr(0, 6 + free_start,
+                  memory_graph[free_start:])
+    window.insstr(0, width - 1, ']')
+
+    swap = psutil.swap_memory()
+
+    swap_graph = "|" * int(round(float(swap.used) / swap.total * graph_length))
+    free_start = len(swap_graph)
+    swap_graph = swap_graph + ' ' * (graph_length - len(swap_graph))
+    swap_usage = str(swap.used / 1024**2) + "/" + str(swap.total / 1024**2) + "MB"
+    swap_graph = swap_graph[:-len(swap_usage)] + swap_usage
+
+    window.addstr(1, 0, "swap [")
+    window.addstr(1, 6, swap_graph[:free_start], color_red)
+    window.addstr(1, 6 + free_start, swap_graph[free_start:])
+    window.insstr(1, width - 1, ']')
+    # swap
+    # red: used
 
 
 if __name__ == "__main__":
@@ -568,6 +621,9 @@ if __name__ == "__main__":
 
     curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)
     color_warning = curses.color_pair(4)
+
+    curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK)
+    color_blue = curses.color_pair(5)
 
     # load
     load = ColorFrame(3, 19, 4, 0, draw_load, "load")
@@ -599,17 +655,18 @@ if __name__ == "__main__":
                                 "em1")
     # # hddtem
     hddtemp = ColorFrame(6, 16, 12, 0,
-                         lambda y, x, w: draw_hddtemp(y, x, w, ["/dev/sdb"]),
+                         lambda y, x, w: draw_hddtemp(y, x, w),
                          "hddtemp")
     # sensors
     sensors = ColorFrame(3, 10, 18, 0, draw_sensors, "temp")
     # raidstatus
-    raid = ColorFrame(3, 46, 22, 34, draw_mdstat, "mdadm")
+    raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
     # smart status
     # ip
     ip = Frame(4, 42, 0, 16, lambda y, x: get_ip(y, x, "em1"), "ip")
     # uname
     # vmstat/mem
+    mem = ColorFrame(4, 50, 30, 0, draw_mem, "mem")
     # virsh list
     libvirt = Frame(5, 25, 7, 55, get_libvirt, "libvirt")
     # (ftp-status)
@@ -617,13 +674,16 @@ if __name__ == "__main__":
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
     # test.update()
 
-    frames = [date, load, df, utime, ip, nstat, nstat, iostat, hddtemp,
-              sensors, libvirt, raid]
+    frames_high_frequency = [date, load, nstat, iostat, mem]
+    frames_low_frequency = [df, utime, ip, hddtemp, sensors, libvirt, raid]
 
     while True:
-        for frame in frames:
-            frame.update()
-        time.sleep(1)
+        for frame in frames_low_frequency:
+                frame.update()
+        for _ in xrange(30):
+            for frame in frames_high_frequency:
+                frame.update()
+            time.sleep(1)
 
     stdscr.keypad(False)
     curses.echo()
