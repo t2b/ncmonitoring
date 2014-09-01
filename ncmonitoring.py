@@ -224,7 +224,8 @@ def get_ip(heigth, width, interface='eth0'):
         ip = ip['addr']
         ret_val.append(ip[-width:])
     except KeyError:
-        ret_val.append("")
+        pass
+        # ret_val.append("")
 
     try:
         ip = ip_list[netifaces.AF_INET6]
@@ -232,7 +233,10 @@ def get_ip(heigth, width, interface='eth0'):
         ip = ip['addr']
         ret_val.append(ip[-width:])
     except KeyError:
-        ret_val.append("")
+        pass
+        # ret_val.append("")
+
+    ret_val = ret_val[:heigth]
 
     return "\n".join(ret_val)
 
@@ -552,12 +556,13 @@ def draw_mdstat(window, heigth, width):
         line += 0
 
 
-def draw_mem(window, heigth, width):
+def draw_memory(window, heigth, width):
     graph_length = width - 7
 
     memory = psutil.virtual_memory()
 
-    memory_graph = '|' * int(round(float(memory.used) / memory.total * graph_length))
+    memory_graph = '|' * int(round(float(memory.used) / memory.total
+                                   * graph_length))
     memory_graph = memory_graph + ' ' * (graph_length - len(memory_graph))
     memory_usage = str((memory.total - memory.available) / 1024**2) \
         + "/" + str(memory.total / 1024**2) + "MB"
@@ -565,7 +570,8 @@ def draw_mem(window, heigth, width):
 
     buffer_start = int(round(float(memory.total - memory.available) /
                              memory.total * graph_length))
-    cashed_start = int(round(float(memory.total - memory.available + memory.buffers) /
+    cashed_start = int(round(float(memory.total - memory.available
+                                   + memory.buffers) /
                              memory.total * graph_length))
     free_start = int(round(float(memory.used) / memory.total * graph_length))
 
@@ -585,7 +591,8 @@ def draw_mem(window, heigth, width):
     swap_graph = "|" * int(round(float(swap.used) / swap.total * graph_length))
     free_start = len(swap_graph)
     swap_graph = swap_graph + ' ' * (graph_length - len(swap_graph))
-    swap_usage = str(swap.used / 1024**2) + "/" + str(swap.total / 1024**2) + "MB"
+    swap_usage = str(swap.used / 1024**2) + "/" + str(swap.total / 1024**2) \
+        + "MB"
     swap_graph = swap_graph[:-len(swap_usage)] + swap_usage
 
     window.addstr(1, 0, "swap [")
@@ -596,8 +603,41 @@ def draw_mem(window, heigth, width):
     # red: used
 
 
+def get_uname(heigth, width):
+    nodename = check_output(["uname", "--nodename"]).strip()
+    kernel_release = check_output(["uname", "--kernel-release"]).strip()
+    if heigth >= 2:
+        return nodename + '\n' + kernel_release
+    if len(nodename) + len(kernel_release) + 1 <= width:
+        return nodename + " " + kernel_release
+    return nodename
+
+
+def draw_smart(window, height, width, devices):
+    line = 0
+    for dev in devices:
+        output = check_output(["smartctl", "-H", dev])
+        output = output.split('\n')
+        status = "UNKNOWN"
+        for output_line in output:
+            output_line = output_line.split(": ")
+            magic_line = "SMART overall-health self-assessment test result"
+            if not output_line[0] == magic_line:
+                continue
+            status = output_line[1].strip()
+            # print dev, status
+        window.addstr(line, 0, dev, curses.A_BOLD)
+        color = color_red
+        if status == "PASSED":
+            color = color_green
+        if status == "UNKNOWN":
+            color = color_yellow
+        window.insstr(line, 10, status, color)
+        # print dev, status
+        line += 1
+
+
 if __name__ == "__main__":
-    print(get_load(1, 2))
     # start
     stdscr = curses.initscr()
     # Keine Anzeige gedrückter Tasten
@@ -626,7 +666,7 @@ if __name__ == "__main__":
     color_blue = curses.color_pair(5)
 
     # load
-    load = ColorFrame(3, 19, 4, 0, draw_load, "load")
+    load = ColorFrame(4, 19, 3, 0, draw_load, "load")
     # date
     date = Frame(3, 21, 0, 59, get_date, "date")
     # df
@@ -640,33 +680,36 @@ if __name__ == "__main__":
     # iotop
     __iostat_dev = "/sys/class/block/sdb"
     iostat = ColorGeneratorFrame(4, 64, 16, 16,
-                                 lambda w, y, x: draw_iostat(w,
-                                                             y,
-                                                             x,
+                                 lambda w, y, x: draw_iostat(w, y, x,
                                                              __iostat_dev),
                                  "sdb")
     # vnstat
     __nstat_dev = "/sys/class/net/em1"
     nstat = ColorGeneratorFrame(4, 64, 12, 16,
-                                lambda w, y, x: draw_netstat(w,
-                                                             y,
-                                                             x,
+                                lambda w, y, x: draw_netstat(w, y, x,
                                                              __nstat_dev),
                                 "em1")
     # # hddtem
     hddtemp = ColorFrame(6, 16, 12, 0,
-                         lambda y, x, w: draw_hddtemp(y, x, w),
+                         lambda w, y, x: draw_hddtemp(w, y, x,
+                                                      ),
                          "hddtemp")
     # sensors
-    sensors = ColorFrame(3, 10, 18, 0, draw_sensors, "temp")
+    sensors = ColorFrame(3, 10, 38, 0, draw_sensors, "temp")
     # raidstatus
     raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
     # smart status
+    smart = ColorFrame(4, 19, 18, 0,
+                       lambda w, y, x: draw_smart(w, y, x,
+                                                  ["/dev/sda",
+                                                   "/dev/sdb"]),
+                       "SMART")
     # ip
-    ip = Frame(4, 42, 0, 16, lambda y, x: get_ip(y, x, "em1"), "ip")
+    ip = Frame(4, 42, 31, 0, lambda y, x: get_ip(y, x, "em1"), "ip")
     # uname
+    uname = Frame(3, 43, 0, 16, get_uname, "host")
     # vmstat/mem
-    mem = ColorFrame(4, 50, 30, 0, draw_mem, "mem")
+    memory = ColorFrame(4, 61, 3, 19, draw_memory, "mem")
     # virsh list
     libvirt = Frame(5, 25, 7, 55, get_libvirt, "libvirt")
     # (ftp-status)
@@ -674,8 +717,20 @@ if __name__ == "__main__":
     # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
     # test.update()
 
-    frames_high_frequency = [date, load, nstat, iostat, mem]
-    frames_low_frequency = [df, utime, ip, hddtemp, sensors, libvirt, raid]
+    frames_high_frequency = [date,
+                             load,
+                             nstat,
+                             iostat,
+                             memory]
+    frames_low_frequency = [df,
+                            utime,
+                            ip,
+                            hddtemp,
+                            sensors,
+                            libvirt,
+                            raid,
+                            uname,
+                            smart]
 
     while True:
         for frame in frames_low_frequency:

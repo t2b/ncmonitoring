@@ -2,7 +2,7 @@
 
 import ncmonitoring as ncm
 
-import time
+# import time
 
 print("load")
 print(ncm.get_load(3, 50))
@@ -20,8 +20,12 @@ print "libvirt"
 print ncm.get_libvirt(1, 2)
 
 print
-print "mem"
-print ncm.draw_mem(0, 1, 50)
+print "uname"
+print ncm.get_uname(1, 40)
+print ncm.get_uname(2, 1)
+
+print "smart"
+print ncm.draw_smart(0, 1, 2)
 
 # print
 # print "mdstat"
