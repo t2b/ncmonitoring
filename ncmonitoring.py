@@ -13,6 +13,7 @@ from os import path
 from telnetlib import Telnet
 from srmqt4 import mdstat
 import psutil
+from natural import size as naturalsize
 
 
 class Frame:
@@ -168,23 +169,29 @@ def __draw_bar(window, pos_y, pos_x,
                   graph[critical:length], color_red)
 
 
+def pretty_size(value, format='decimal', digits=3):
+    pretty_value = naturalsize.filesize(value, format=format, digits=digits)
+    pretty_value = pretty_value.split()
+    pretty_value[0] = pretty_value[0][:digits]
+    pretty_value[0] = pretty_value[0].strip('.')
+    return pretty_value
+
+
 def draw_df(window, heigth, width, mountpoints=["/"]):
     if width < 40:
         mountname_length = int(width - 12) / 2
     else:
         mountname_length = 15
-    graph_width = width - mountname_length - 13
+    graph_width = width - mountname_length - 15
 
     line = 0
     for mount in mountpoints:
-        output = check_output(["df", mount, "-h"])
-        output = output.decode('utf8')
-        output = output.split("\n")[1]
-        output = output.split()
-        size = output[1]
-        used = output[2]
-        percent = output[4]
-        percent = int(percent[:-1])
+        disk_stat = psutil.disk_usage(mount)
+        size = disk_stat.total
+        size = ''.join(pretty_size(size))
+        used = disk_stat.used
+        used = ''.join(pretty_size(used))
+        percent = disk_stat.percent
         percent = int(percent * graph_width / 100)
 
         window.addstr(line,
@@ -200,7 +207,7 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
                       ']')
         window.insstr(line,
                       mountname_length + 2 + graph_width + 2,
-                      "{:>4}/{:<4}".format(used, size))
+                      "{:>5}/{:<5}".format(used, size))
 
         line += 1
 
@@ -241,7 +248,7 @@ def get_ip(heigth, width, interface='eth0'):
     return "\n".join(ret_val)
 
 
-def draw_hddtemp(window, heigth, width, devices=None):
+def draw_hddtemp(window, heigth, width):
     t = Telnet()
     t.open("localhost", 7634)
     output = t.read_all()
@@ -583,7 +590,7 @@ def draw_memory(window, heigth, width):
     window.addstr(0, 6 + cashed_start,
                   memory_graph[cashed_start:free_start], color_yellow)
     window.addstr(0, 6 + free_start,
-                  memory_graph[free_start:])
+                  memory_graph[free_start:], color_grey)
     window.insstr(0, width - 1, ']')
 
     swap = psutil.swap_memory()
@@ -597,7 +604,7 @@ def draw_memory(window, heigth, width):
 
     window.addstr(1, 0, "swap [")
     window.addstr(1, 6, swap_graph[:free_start], color_red)
-    window.addstr(1, 6 + free_start, swap_graph[free_start:])
+    window.addstr(1, 6 + free_start, swap_graph[free_start:], color_grey)
     window.insstr(1, width - 1, ']')
     # swap
     # red: used
@@ -626,7 +633,7 @@ def draw_smart(window, height, width, devices):
                 continue
             status = output_line[1].strip()
             # print dev, status
-        window.addstr(line, 0, dev, curses.A_BOLD)
+        window.addstr(line, 0, dev)
         color = color_red
         if status == "PASSED":
             color = color_green
@@ -665,47 +672,47 @@ if __name__ == "__main__":
     curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK)
     color_blue = curses.color_pair(5)
 
+    curses.init_pair(6, curses.COLOR_BLACK + 8, curses.COLOR_BLACK)
+    color_grey = curses.color_pair(6)
+
     # load
     load = ColorFrame(4, 19, 3, 0, draw_load, "load")
     # date
     date = Frame(3, 21, 0, 59, get_date, "date")
     # df
+    __df_dev = ["/", "/home", "/tmp"]
     df = ColorFrame(5, 55, 7, 0,
-                    lambda w, y, x: draw_df(w, y, x, ["/",
-                                                      "/home",
-                                                      "/tmp"]),
+                    lambda w, y, x: draw_df(w, y, x, __df_dev),
                     "df")
     # uptime
     utime = Frame(3, 16, 0, 0, get_uptime, "uptime")
     # iotop
-    __iostat_dev = "/sys/class/block/sdb"
+    __iostat_dev = "/sys/class/block/sda"
     iostat = ColorGeneratorFrame(4, 64, 16, 16,
                                  lambda w, y, x: draw_iostat(w, y, x,
                                                              __iostat_dev),
-                                 "sdb")
+                                 "sda")
     # vnstat
-    __nstat_dev = "/sys/class/net/em1"
+    __nstat_dev = "/sys/class/net/p6p1"
     nstat = ColorGeneratorFrame(4, 64, 12, 16,
                                 lambda w, y, x: draw_netstat(w, y, x,
                                                              __nstat_dev),
-                                "em1")
+                                "p6p1")
     # # hddtem
     hddtemp = ColorFrame(6, 16, 12, 0,
-                         lambda w, y, x: draw_hddtemp(w, y, x,
-                                                      ),
+                         lambda w, y, x: draw_hddtemp(w, y, x),
                          "hddtemp")
     # sensors
     sensors = ColorFrame(3, 10, 38, 0, draw_sensors, "temp")
     # raidstatus
     raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
     # smart status
+    __smart_dev = ["/dev/sda"]
     smart = ColorFrame(4, 19, 18, 0,
-                       lambda w, y, x: draw_smart(w, y, x,
-                                                  ["/dev/sda",
-                                                   "/dev/sdb"]),
+                       lambda w, y, x: draw_smart(w, y, x, __smart_dev),
                        "SMART")
     # ip
-    ip = Frame(4, 42, 31, 0, lambda y, x: get_ip(y, x, "em1"), "ip")
+    ip = Frame(4, 42, 31, 0, lambda y, x: get_ip(y, x, "p6p1"), "ip")
     # uname
     uname = Frame(3, 43, 0, 16, get_uname, "host")
     # vmstat/mem
