@@ -148,6 +148,8 @@ def draw_load(window, height, width):
 def __draw_bar(window, pos_y, pos_x,
                length, value,
                usage_string="", warning=None, critical=None, sign="|"):
+    if value > length:
+        value = length
     if critical is None:
         critical = int(length * 0.9)
         if length > 1 and critical == length:
@@ -177,7 +179,7 @@ def __draw_bar(window, pos_y, pos_x,
                   graph[value:], color_grey + curses.A_BOLD)
 
 
-def pretty_size(value, format='decimal', digits=3):
+def pretty_size(value, format='decimal', digits=4):
     pretty_value = naturalsize.filesize(value, format=format, digits=digits)
     pretty_value = pretty_value.split()
     pretty_value[0] = pretty_value[0][:digits]
@@ -186,6 +188,7 @@ def pretty_size(value, format='decimal', digits=3):
 
 
 def draw_df(window, heigth, width, mountpoints=["/"]):
+    digits = 4
     if width < 40:
         mountname_length = int(width - 12) / 2
     else:
@@ -196,9 +199,9 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
     for mount in mountpoints:
         disk_stat = psutil.disk_usage(mount)
         size = disk_stat.total
-        size = ''.join(pretty_size(size))
+        size = ''.join(pretty_size(size, digits=digits))
         used = disk_stat.used
-        used = ''.join(pretty_size(used))
+        used = ''.join(pretty_size(used, digits=digits))
         percent = disk_stat.percent
         percent = int(percent * graph_width / 100)
 
@@ -213,9 +216,6 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         window.insstr(line,
                       mountname_length + 2 + graph_width,
                       ']')
-        # window.insstr(line,
-        #               mountname_length + 2 + graph_width + 2,
-        #               "{:>5}/{:<5}".format(used, size))
 
         line += 1
 
@@ -312,6 +312,7 @@ def __netstat(device):
 def draw_netstat(window, height, width, device):
     netstat_generator = __netstat(device)
     graph_length = width - 8
+    digits = 4
     while True:
         rx_speed, tx_speed = netstat_generator.next()
 
@@ -319,14 +320,14 @@ def draw_netstat(window, height, width, device):
         __draw_bar(window, 0, 5,
                    graph_length,
                    int(round(graph_length * rx_speed / 1024**3)),
-                   "".join(pretty_size(rx_speed, digits=4)) + "it/s")
+                   "".join(pretty_size(rx_speed, digits=digits)) + "it/s")
         window.insstr(0, 5 + graph_length, "]")
 
         window.addstr(1, 0, "tx: [")
         __draw_bar(window, 1, 5,
                    graph_length,
                    int(round(graph_length * tx_speed / 1024**3)),
-                   "".join(pretty_size(tx_speed, digits=4)) + "it/s")
+                   "".join(pretty_size(tx_speed, digits=digits)) + "it/s")
         window.insstr(1, 5 + graph_length, "]")
         yield None
 
@@ -364,6 +365,7 @@ def __iostat(device):
 def draw_iostat(window, height, width, device):
     iostat_generator = __iostat(device)
     graph_length = width - 11
+    digits = 4
     while True:
         read_speed, write_speed = iostat_generator.next()
 
@@ -371,14 +373,14 @@ def draw_iostat(window, height, width, device):
         __draw_bar(window, 0, 8,
                    graph_length,
                    int(round(graph_length * read_speed / 1024**2 / 100)),
-                   "".join(pretty_size(read_speed, digits=4)) + "/s")
+                   "".join(pretty_size(read_speed, digits=digits)) + "/s")
         window.insstr(0, 8 + graph_length, "]")
 
         window.addstr(1, 0, "write: [")
         __draw_bar(window, 1, 8,
                    graph_length,
                    int(round(graph_length * write_speed / 1024**2 / 100)),
-                   "".join(pretty_size(write_speed, digits=4)) + "/s")
+                   "".join(pretty_size(write_speed, digits=digits)) + "/s")
         window.insstr(1, 8 + graph_length, "]")
         yield None
 
@@ -578,14 +580,15 @@ def draw_mdstat(window, heigth, width):
 
 def draw_memory(window, heigth, width):
     graph_length = width - 7
+    digits = 4
 
     memory = psutil.virtual_memory()
 
     memory_graph = '|' * int(round(float(memory.used) / memory.total
                                    * graph_length))
     memory_graph = memory_graph + ' ' * (graph_length - len(memory_graph))
-    memory_usage = str((memory.total - memory.available) / 1024**2) \
-        + "/" + str(memory.total / 1024**2) + "MB"
+    memory_usage = "".join(pretty_size(memory.total - memory.available, digits=digits)) \
+        + "/" + "".join(pretty_size(memory.total, digits=digits))
     memory_graph = memory_graph[:-len(memory_usage)] + memory_usage
 
     buffer_start = int(round(float(memory.total - memory.available) /
@@ -611,8 +614,8 @@ def draw_memory(window, heigth, width):
     swap_graph = "|" * int(round(float(swap.used) / swap.total * graph_length))
     free_start = len(swap_graph)
     swap_graph = swap_graph + ' ' * (graph_length - len(swap_graph))
-    swap_usage = str(swap.used / 1024**2) + "/" + str(swap.total / 1024**2) \
-        + "MB"
+    swap_usage = "".join(pretty_size(swap.used, digits=digits)) \
+        + "/" + "".join(pretty_size(swap.total, digits=digits))
     swap_graph = swap_graph[:-len(swap_usage)] + swap_usage
 
     window.addstr(1, 0, "swap [")
@@ -700,31 +703,31 @@ if __name__ == "__main__":
     utime = Frame(3, 16, 0, 0, get_uptime, "uptime")
     # iotop
     __iostat_dev = "sda2"
-    iostat = ColorGeneratorFrame(4, 64, 16, 16,
+    iostat = ColorGeneratorFrame(4, 61, 16, 19,
                                  lambda w, y, x: draw_iostat(w, y, x,
                                                              __iostat_dev),
                                  "sda")
     # vnstat
     __nstat_dev = "wlp1s0"
-    nstat = ColorGeneratorFrame(4, 64, 12, 16,
+    nstat = ColorGeneratorFrame(4, 61, 12, 19,
                                 lambda w, y, x: draw_netstat(w, y, x,
                                                              __nstat_dev),
                                 "p6p1")
-    # # hddtem
+    # hddtem
     hddtemp = ColorFrame(6, 16, 12, 0,
                          lambda w, y, x: draw_hddtemp(w, y, x),
                          "hddtemp")
     # sensors
-    sensors = ColorFrame(3, 10, 38, 0, draw_sensors, "temp")
+    sensors = ColorFrame(3, 10, 20, 19, draw_sensors, "temp")
     # raidstatus
-    raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
+    raid = ColorFrame(3, 45, 20, 35, draw_mdstat, "mdadm")
     # smart status
     __smart_dev = ["/dev/sda"]
-    smart = ColorFrame(4, 19, 18, 0,
+    smart = ColorFrame(7, 19, 18, 0,
                        lambda w, y, x: draw_smart(w, y, x, __smart_dev),
                        "SMART")
     # ip
-    ip = Frame(4, 42, 31, 0, lambda y, x: get_ip(y, x, "p6p1"), "ip")
+    ip = Frame(3, 42, 23, 38, lambda y, x: get_ip(y, x, "p6p1"), "ip")
     # uname
     uname = Frame(3, 43, 0, 16, get_uname, "host")
     # vmstat/mem
@@ -733,8 +736,14 @@ if __name__ == "__main__":
     libvirt = Frame(5, 25, 7, 55, get_libvirt, "libvirt")
     # (ftp-status)
 
-    # test = Frame(25, 80, 0, 0, lambda y, x: "1234567890", "test")
-    # test.update()
+    def test_func(y, x):
+        line = "%" * x
+        retval = []
+        for _ in xrange(y):
+            retval.append(line)
+        return "\n".join(retval)
+    test = Frame(25, 80, 0, 0, test_func, "test")
+    test.update()
 
     frames_high_frequency = [date,
                              load,
