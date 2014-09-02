@@ -659,37 +659,7 @@ def draw_smart(window, height, width, devices):
         line += 1
 
 
-if __name__ == "__main__":
-    # start
-    stdscr = curses.initscr()
-    # Keine Anzeige gedrückter Tasten
-    curses.noecho()
-    # Kein line-buffer
-    curses.cbreak()
-    curses.curs_set(0)
-    stdscr.keypad(True)
-    curses.start_color()
-
-    color_default = curses.color_pair(0)
-
-    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    color_green = curses.color_pair(1)
-
-    curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-    color_yellow = curses.color_pair(2)
-
-    curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
-    color_red = curses.color_pair(3)
-
-    curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)
-    color_warning = curses.color_pair(4)
-
-    curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK)
-    color_blue = curses.color_pair(5)
-
-    curses.init_pair(6, curses.COLOR_BLACK + 8, curses.COLOR_BLACK)
-    color_grey = curses.color_pair(6)
-
+def main(_):
     # load
     load = ColorFrame(4, 19, 3, 0, draw_load, "load")
     # date
@@ -767,6 +737,40 @@ if __name__ == "__main__":
             for frame in frames_high_frequency:
                 frame.update()
             time.sleep(1)
+
+
+if __name__ == "__main__":
+    # start
+    stdscr = curses.initscr()
+    # Keine Anzeige gedrückter Tasten
+    curses.noecho()
+    # Kein line-buffer
+    curses.cbreak()
+    curses.curs_set(0)
+    stdscr.keypad(True)
+    curses.start_color()
+
+    color_default = curses.color_pair(0)
+
+    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    color_green = curses.color_pair(1)
+
+    curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    color_yellow = curses.color_pair(2)
+
+    curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
+    color_red = curses.color_pair(3)
+
+    curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)
+    color_warning = curses.color_pair(4)
+
+    curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK)
+    color_blue = curses.color_pair(5)
+
+    curses.init_pair(6, curses.COLOR_BLACK + 8, curses.COLOR_BLACK)
+    color_grey = curses.color_pair(6)
+
+    curses.wrapper(main)
 
     stdscr.keypad(False)
     curses.echo()
