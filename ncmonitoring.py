@@ -286,32 +286,26 @@ def draw_hddtemp(window, heigth, width):
 
 
 def __netstat(device):
-    prev_rx_timstamp = time.time()
-    prev_rx_bytes = 0
-    with open(path.join(device, "statistics/rx_bytes")) as f:
-        prev_rx_bytes = long(f.read())
-
-    prev_tx_timstamp = time.time()
-    prev_tx_bytes = 0
-    with open(path.join(device, "statistics/tx_bytes")) as f:
-        prev_tx_bytes = long(f.read())
+    prev_timestamp = time.time()
+    net_io_counters = psutil.net_io_counters(pernic=True)
+    prev_tx_bytes = net_io_counters[device].bytes_sent
+    prev_rx_bytes = net_io_counters[device].bytes_recv
 
     while True:
-        rx_timestamp = time.time()
-        with open(path.join(device, "statistics/rx_bytes")) as f:
-            rx_bytes = long(f.read())
+        timestamp = time.time()
+        net_io_counters = psutil.net_io_counters(pernic=True)
+        tx_bytes = net_io_counters[device].bytes_sent
+        rx_bytes = net_io_counters[device].bytes_recv
+
         rx_speed = (rx_bytes - prev_rx_bytes) \
-            / (rx_timestamp - prev_rx_timstamp) * 8
-        prev_rx_timstamp = rx_timestamp
+            / (timestamp - prev_timestamp) * 8
         prev_rx_bytes = rx_bytes
 
-        tx_timestamp = time.time()
-        with open(path.join(device, "statistics/tx_bytes")) as f:
-            tx_bytes = long(f.read())
         tx_speed = (tx_bytes - prev_tx_bytes) \
-            / (tx_timestamp - prev_tx_timstamp) * 8
-        prev_tx_timstamp = tx_timestamp
+            / (timestamp - prev_timestamp) * 8
         prev_tx_bytes = tx_bytes
+
+        prev_timestamp = timestamp
         yield (rx_speed, tx_speed)
 
 
@@ -320,8 +314,6 @@ def draw_netstat(window, height, width, device):
     graph_length = width - 8
     while True:
         rx_speed, tx_speed = netstat_generator.next()
-        # rx_speed = rx_speed / 1000**2
-        # tx_speed = tx_speed / 1000**2
 
         window.addstr(0, 0, "rx: [")
         __draw_bar(window, 0, 5,
@@ -341,21 +333,28 @@ def draw_netstat(window, height, width, device):
 
 def __iostat(device):
     prev_timstamp = time.time()
-    with open(path.join(device, "stat")) as f:
-        output = f.read()
-    output = output.split()
-    prev_read = int(output[2])
-    prev_write = int(output[6])
+
+    disk_io_counters = psutil.disk_io_counters(perdisk=True)
+    # with open(path.join(device, "stat")) as f:
+    #     output = f.read()
+    # output = output.split()
+    # prev_read = int(output[2])
+    # prev_write = int(output[6])
+    prev_read = disk_io_counters[device].read_bytes
+    prev_write = disk_io_counters[device].write_bytes
 
     while True:
         timestamp = time.time()
-        with open(path.join(device, "stat")) as f:
-            output = f.read()
-        output = output.split()
-        read = int(output[2])
-        write = int(output[6])
-        read_speed = (read - prev_read) / (timestamp - prev_timstamp) * 512
-        write_speed = (write - prev_write) / (timestamp - prev_timstamp) * 512
+        # with open(path.join(device, "stat")) as f:
+        #     output = f.read()
+        # output = output.split()
+        # read = int(output[2])
+        # write = int(output[6])
+        disk_io_counters = psutil.disk_io_counters(perdisk=True)
+        read = disk_io_counters[device].read_bytes
+        write = disk_io_counters[device].write_bytes
+        read_speed = (read - prev_read) / (timestamp - prev_timstamp)
+        write_speed = (write - prev_write) / (timestamp - prev_timstamp)
         prev_timstamp = timestamp
         prev_read = read
         prev_write = write
@@ -367,8 +366,6 @@ def draw_iostat(window, height, width, device):
     graph_length = width - 11
     while True:
         read_speed, write_speed = iostat_generator.next()
-        # read_speed = read_speed / 1000**2
-        # write_speed = write_speed / 1000**2
 
         window.addstr(0, 0, "read:  [")
         __draw_bar(window, 0, 8,
@@ -620,10 +617,9 @@ def draw_memory(window, heigth, width):
 
     window.addstr(1, 0, "swap [")
     window.addstr(1, 6, swap_graph[:free_start], color_red)
-    window.addstr(1, 6 + free_start, swap_graph[free_start:], color_grey + curses.A_BOLD)
+    window.addstr(1, 6 + free_start, swap_graph[free_start:],
+                  color_grey + curses.A_BOLD)
     window.insstr(1, width - 1, ']')
-    # swap
-    # red: used
 
 
 def get_uname(heigth, width):
@@ -703,13 +699,13 @@ if __name__ == "__main__":
     # uptime
     utime = Frame(3, 16, 0, 0, get_uptime, "uptime")
     # iotop
-    __iostat_dev = "/sys/class/block/sda"
+    __iostat_dev = "sda2"
     iostat = ColorGeneratorFrame(4, 64, 16, 16,
                                  lambda w, y, x: draw_iostat(w, y, x,
                                                              __iostat_dev),
                                  "sda")
     # vnstat
-    __nstat_dev = "/sys/class/net/p6p1"
+    __nstat_dev = "wlp1s0"
     nstat = ColorGeneratorFrame(4, 64, 12, 16,
                                 lambda w, y, x: draw_netstat(w, y, x,
                                                              __nstat_dev),
