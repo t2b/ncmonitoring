@@ -146,7 +146,8 @@ def draw_load(window, height, width):
 
 
 def __draw_bar(window, pos_y, pos_x,
-               length, value, warning=None, critical=None, sign="|"):
+               length, value,
+               usage_string="", warning=None, critical=None, sign="|"):
     if critical is None:
         critical = int(length * 0.9)
         if length > 1 and critical == length:
@@ -158,15 +159,22 @@ def __draw_bar(window, pos_y, pos_x,
             warning = critical - 1
 
     graph = sign * value
+    graph = graph + " " * (length - value)
+    if len(usage_string) > 0:
+        graph = graph[:-len(usage_string)] + usage_string
+
     window.addstr(pos_y,
                   pos_x,
-                  graph[:warning], color_green)
+                  graph[:min(value, warning)], color_green)
     window.addstr(pos_y,
                   pos_x + warning,
-                  graph[warning:critical], color_yellow)
+                  graph[min(value, warning):min(value, critical)], color_yellow)
     window.addstr(pos_y,
                   pos_x + critical,
-                  graph[critical:length], color_red)
+                  graph[min(value, critical):value], color_red)
+    window.addstr(pos_y,
+                  pos_x + value,
+                  graph[value:], color_grey + curses.A_BOLD)
 
 
 def pretty_size(value, format='decimal', digits=3):
@@ -182,7 +190,7 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         mountname_length = int(width - 12) / 2
     else:
         mountname_length = 15
-    graph_width = width - mountname_length - 15
+    graph_width = width - mountname_length - 3
 
     line = 0
     for mount in mountpoints:
@@ -201,13 +209,13 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
                       mountname_length + 1,
                       '[')
         __draw_bar(window, line, mountname_length + 2,
-                   graph_width, percent)
-        window.addstr(line,
+                   graph_width, percent, used + "/" + size)
+        window.insstr(line,
                       mountname_length + 2 + graph_width,
                       ']')
-        window.insstr(line,
-                      mountname_length + 2 + graph_width + 2,
-                      "{:>5}/{:<5}".format(used, size))
+        # window.insstr(line,
+        #               mountname_length + 2 + graph_width + 2,
+        #               "{:>5}/{:<5}".format(used, size))
 
         line += 1
 
@@ -309,21 +317,25 @@ def __netstat(device):
 
 def draw_netstat(window, height, width, device):
     netstat_generator = __netstat(device)
-    graph_length = width - 22
+    graph_length = width - 8
     while True:
         rx_speed, tx_speed = netstat_generator.next()
-        rx_speed = rx_speed / 1000**2
-        tx_speed = tx_speed / 1000**2
+        # rx_speed = rx_speed / 1000**2
+        # tx_speed = tx_speed / 1000**2
 
         window.addstr(0, 0, "rx: [")
         __draw_bar(window, 0, 5,
-                   graph_length, int(round(graph_length * rx_speed / 1000)))
-        window.insstr(0, 5 + graph_length, "] %6.1f Mbit/s" % rx_speed)
+                   graph_length,
+                   int(round(graph_length * rx_speed / 1024**3)),
+                   "".join(pretty_size(rx_speed, digits=4)) + "it/s")
+        window.insstr(0, 5 + graph_length, "]")
 
         window.addstr(1, 0, "tx: [")
         __draw_bar(window, 1, 5,
-                   graph_length, int(round(graph_length * tx_speed / 1000)))
-        window.insstr(1, 5 + graph_length, "] %6.1f Mbit/s" % tx_speed)
+                   graph_length,
+                   int(round(graph_length * tx_speed / 1024**3)),
+                   "".join(pretty_size(tx_speed, digits=4)) + "it/s")
+        window.insstr(1, 5 + graph_length, "]")
         yield None
 
 
@@ -352,21 +364,25 @@ def __iostat(device):
 
 def draw_iostat(window, height, width, device):
     iostat_generator = __iostat(device)
-    graph_length = width - 22
+    graph_length = width - 11
     while True:
         read_speed, write_speed = iostat_generator.next()
-        read_speed = read_speed / 1000**2
-        write_speed = write_speed / 1000**2
+        # read_speed = read_speed / 1000**2
+        # write_speed = write_speed / 1000**2
 
         window.addstr(0, 0, "read:  [")
         __draw_bar(window, 0, 8,
-                   graph_length, int(round(graph_length * read_speed / 100)))
-        window.insstr(0, 8 + graph_length, "] %5.1f MB/s" % read_speed)
+                   graph_length,
+                   int(round(graph_length * read_speed / 1024**2 / 100)),
+                   "".join(pretty_size(read_speed, digits=4)) + "/s")
+        window.insstr(0, 8 + graph_length, "]")
 
         window.addstr(1, 0, "write: [")
         __draw_bar(window, 1, 8,
-                   graph_length, int(round(graph_length * write_speed / 100)))
-        window.insstr(1, 8 + graph_length, "] %5.1f MB/s" % write_speed)
+                   graph_length,
+                   int(round(graph_length * write_speed / 1024**2 / 100)),
+                   "".join(pretty_size(write_speed, digits=4)) + "/s")
+        window.insstr(1, 8 + graph_length, "]")
         yield None
 
 
@@ -590,7 +606,7 @@ def draw_memory(window, heigth, width):
     window.addstr(0, 6 + cashed_start,
                   memory_graph[cashed_start:free_start], color_yellow)
     window.addstr(0, 6 + free_start,
-                  memory_graph[free_start:], color_grey)
+                  memory_graph[free_start:], color_grey + curses.A_BOLD)
     window.insstr(0, width - 1, ']')
 
     swap = psutil.swap_memory()
@@ -604,7 +620,7 @@ def draw_memory(window, heigth, width):
 
     window.addstr(1, 0, "swap [")
     window.addstr(1, 6, swap_graph[:free_start], color_red)
-    window.addstr(1, 6 + free_start, swap_graph[free_start:], color_grey)
+    window.addstr(1, 6 + free_start, swap_graph[free_start:], color_grey + curses.A_BOLD)
     window.insstr(1, width - 1, ']')
     # swap
     # red: used
