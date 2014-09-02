@@ -24,31 +24,11 @@ print "uname"
 print ncm.get_uname(1, 40)
 print ncm.get_uname(2, 1)
 
-print "natural"
-# import natural
-# print help(natural)
-# from natural import constant
-# print help(constant)
-# from natural import data
-# print help(data)
-# from natural import date
-# print help(date)
-# from natural import file
-# print help(file)
-# from natural import number
-# print help(number)
-# from natural import size
-# print help(size)
-# from natural import text
-# print help(text)
-#
-# print "number", number.number(12345678)
-# print "size.binary", size.binarysize(12345678)
-# print "size.decimal", size.decimalsize(12345678)
-# print "size.gnu", size.gnusize(12345678)
+print
+print "pretty_size"
 for n in range(0, 20):
     print ''.join(ncm.pretty_size(11**n))
-# print text.nato("ttb")
+print ncm.pretty_size(1023)
 
 # netstat = ncm.get_netstat(13, 14, "/sys/class/net/em1/")
 # for _ in range(150):

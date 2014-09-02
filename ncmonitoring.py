@@ -9,11 +9,11 @@ import subprocess
 from subprocess import check_output
 import uptime
 import netifaces
-from os import path
 from telnetlib import Telnet
+import socket
 from srmqt4 import mdstat
 import psutil
-from natural import size as naturalsize
+import natural
 
 
 class Frame:
@@ -180,11 +180,17 @@ def __draw_bar(window, pos_y, pos_x,
 
 
 def pretty_size(value, format='decimal', digits=4):
-    pretty_value = naturalsize.filesize(value, format=format, digits=digits)
-    pretty_value = pretty_value.split()
-    pretty_value[0] = pretty_value[0][:digits]
-    pretty_value[0] = pretty_value[0].strip('.')
-    return pretty_value
+    suffix = natural.constant.FILESIZE_SUFFIX[format]
+    base = natural.size.FILESIZE_BASE[format]
+    exponent = 0
+    value = float(value)
+    while value >= 1000:
+        exponent += 1
+        value = value / base
+    format_string = "%." + str(digits) + "f"
+    value = format_string % value
+    value = value[:digits].strip('.')
+    return (value, suffix[exponent])
 
 
 def draw_df(window, heigth, width, mountpoints=["/"]):
@@ -257,11 +263,14 @@ def get_ip(heigth, width, interface='eth0'):
 
 
 def draw_hddtemp(window, heigth, width):
-    t = Telnet()
-    t.open("localhost", 7634)
-    output = t.read_all()
-    t.close()
-    t.close
+    try:
+        t = Telnet()
+        t.open("localhost", 7634)
+        output = t.read_all()
+        t.close()
+    except socket.error as e:
+        window.addstr(0, 0, str(e)[:heigth*width-1], color_warning)
+        return
     seperator = '|'
     output = output.split(seperator * 2)
     output = map(lambda x: x.strip(seperator).split(seperator), output)
@@ -405,6 +414,7 @@ def draw_sensors(window, height, width):
 
 
 def get_libvirt(heigth, width):
+    name_length = 15
     output = check_output(["virsh", "list", "--all"])
     output = output.split("\n")
     output = output[2:]
@@ -415,7 +425,8 @@ def get_libvirt(heigth, width):
             continue
         vm_name = line[1]
         vm_state = " ".join(line[2:])
-        vm = "{:<15} {:<8}".format(vm_name, vm_state)
+        format_string = "{:<%i} {:<8}" % name_length
+        vm = format_string.format(vm_name, vm_state)
         ret_val.append(vm)
     return "\n".join(ret_val)
 
@@ -697,7 +708,7 @@ def main(_):
                        lambda w, y, x: draw_smart(w, y, x, __smart_dev),
                        "SMART")
     # ip
-    ip = Frame(3, 42, 23, 38, lambda y, x: get_ip(y, x, "p6p1"), "ip")
+    ip = Frame(3, 42, 23, 38, lambda y, x: get_ip(y, x, "wlp1s0"), "ip")
     # uname
     uname = Frame(3, 43, 0, 16, get_uname, "host")
     # vmstat/mem
@@ -732,7 +743,7 @@ def main(_):
 
     while True:
         for frame in frames_low_frequency:
-                frame.update()
+            frame.update()
         for _ in xrange(30):
             for frame in frames_high_frequency:
                 frame.update()
