@@ -13,7 +13,8 @@ from telnetlib import Telnet
 import socket
 from srmqt4 import mdstat
 import psutil
-import natural
+from natural import constant as natural_constant
+from natural import size as natural_size
 
 
 class Frame:
@@ -62,8 +63,7 @@ class Frame:
                 self._contentwindow.addstr(i, 0,
                                            content[i][:self._content_width])
             else:
-                self._contentwindow.addstr(i, 0, content[i][-1:])
-                self._contentwindow.insstr(i, 0, content[i][:-1])
+                self._contentwindow.insstr(i, 0, content[i])
         if refresh:
             self.refresh()
 
@@ -111,9 +111,9 @@ class ColorGeneratorFrame(ColorFrame, GeneratorFrame):
 
 
 def get_date(height, width):
-    time_format = "%F %X"
+    time_format = "%F %T"
     if width < 19:
-        time_format = "%X"
+        time_format = "%T"
     if width < 8:
         time_format = "%H:%M"
     if width < 5:
@@ -179,9 +179,9 @@ def __draw_bar(window, pos_y, pos_x,
                   graph[value:], color_grey + curses.A_BOLD)
 
 
-def pretty_size(value, format='decimal', digits=4):
-    suffix = natural.constant.FILESIZE_SUFFIX[format]
-    base = natural.size.FILESIZE_BASE[format]
+def pretty_size(value, suffix_format='decimal', digits=4):
+    suffix = natural_constant.FILESIZE_SUFFIX[suffix_format]
+    base = natural_size.FILESIZE_BASE[suffix_format]
     exponent = 0
     value = float(value)
     while value >= 1000:
@@ -229,7 +229,7 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
 def get_uptime(heigth, width):
     utime = uptime.uptime()
     utime = int(utime)
-    minutes, seconds = divmod(utime, 60)
+    minutes, _ = divmod(utime, 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
     return "%3i days %02i:%02i" % (days, hours, minutes)
@@ -264,12 +264,12 @@ def get_ip(heigth, width, interface='eth0'):
 
 def draw_hddtemp(window, heigth, width):
     try:
-        t = Telnet()
-        t.open("localhost", 7634)
-        output = t.read_all()
-        t.close()
-    except socket.error as e:
-        window.addstr(0, 0, str(e)[:heigth*width-1], color_warning)
+        telnet_conncection = Telnet()
+        telnet_conncection.open("localhost", 7634)
+        output = telnet_conncection.read_all()
+        telnet_conncection.close()
+    except socket.error as error:
+        window.addstr(0, 0, str(error)[:heigth*width-1], color_warning)
         return
     seperator = '|'
     output = output.split(seperator * 2)
@@ -598,7 +598,8 @@ def draw_memory(window, heigth, width):
     memory_graph = '|' * int(round(float(memory.used) / memory.total
                                    * graph_length))
     memory_graph = memory_graph + ' ' * (graph_length - len(memory_graph))
-    memory_usage = "".join(pretty_size(memory.total - memory.available, digits=digits)) \
+    memory_usage = "".join(pretty_size(memory.total - memory.available,
+                                       digits=digits)) \
         + "/" + "".join(pretty_size(memory.total, digits=digits))
     memory_graph = memory_graph[:-len(memory_usage)] + memory_usage
 
@@ -622,17 +623,13 @@ def draw_memory(window, heigth, width):
 
     swap = psutil.swap_memory()
 
-    swap_graph = "|" * int(round(float(swap.used) / swap.total * graph_length))
-    free_start = len(swap_graph)
-    swap_graph = swap_graph + ' ' * (graph_length - len(swap_graph))
     swap_usage = "".join(pretty_size(swap.used, digits=digits)) \
         + "/" + "".join(pretty_size(swap.total, digits=digits))
-    swap_graph = swap_graph[:-len(swap_usage)] + swap_usage
 
     window.addstr(1, 0, "swap [")
-    window.addstr(1, 6, swap_graph[:free_start], color_red)
-    window.addstr(1, 6 + free_start, swap_graph[free_start:],
-                  color_grey + curses.A_BOLD)
+    __draw_bar(window, 1, 6, graph_length,
+               int(round(float(swap.used) / swap.total * graph_length)),
+               swap_usage, 0, 0)
     window.insstr(1, width - 1, ']')
 
 
@@ -672,7 +669,7 @@ def draw_smart(window, height, width, devices):
 
 def main(_):
     # load
-    load = ColorFrame(4, 19, 3, 0, draw_load, "load")
+    load = ColorFrame(3, 19, 3, 0, draw_load, "load")
     # date
     date = Frame(3, 21, 0, 59, get_date, "date")
     # df
@@ -714,7 +711,7 @@ def main(_):
     # vmstat/mem
     memory = ColorFrame(4, 61, 3, 19, draw_memory, "mem")
     # virsh list
-    libvirt = Frame(5, 25, 7, 55, get_libvirt, "libvirt")
+    libvirt = Frame(4, 25, 7, 55, get_libvirt, "libvirt")
     # (ftp-status)
 
     def test_func(y, x):
@@ -723,8 +720,13 @@ def main(_):
         for _ in xrange(y):
             retval.append(line)
         return "\n".join(retval)
+
     test = Frame(25, 80, 0, 0, test_func, "test")
     test.update()
+    # time.sleep(5)
+
+    performence = None
+    performence = Frame(1, 20, 25, 0, lambda y, x: "%17.6f" % time.time())
 
     frames_high_frequency = [date,
                              load,
@@ -745,6 +747,8 @@ def main(_):
         for frame in frames_low_frequency:
             frame.update()
         for _ in xrange(30):
+            if performence:
+                performence.update()
             for frame in frames_high_frequency:
                 frame.update()
             time.sleep(1)
