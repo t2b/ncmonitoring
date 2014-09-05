@@ -45,11 +45,9 @@ class Frame:
                                                 self._content_width,
                                                 pos_y + 1,
                                                 pos_x + 1)
-            # self.update()
 
     def update(self, refresh=True):
         if self._borderwindow:
-            # self._borderwindow.clear()
             self._borderwindow.border()
             self._borderwindow.addstr(0, 1, self._title)
 
@@ -81,7 +79,6 @@ class Frame:
 class ColorFrame(Frame):
     def update(self, refresh=True):
         if self._borderwindow:
-            # self._borderwindow.clear()
             self._borderwindow.border()
             self._borderwindow.addstr(0, 1, self._title)
 
@@ -669,49 +666,49 @@ def draw_smart(window, height, width, devices):
 
 def main(_):
     # load
-    load = ColorFrame(3, 19, 3, 0, draw_load, "load")
+    load = ColorFrame(3, 19, 1, 16, draw_load, "load")
     # date
-    date = Frame(3, 21, 0, 59, get_date, "date")
+    date = Frame(1, 19, 0, 61, get_date)
     # df
     __df_dev = ["/", "/home", "/tmp"]
-    df = ColorFrame(5, 55, 7, 0,
+    df = ColorFrame(6, 61, 8, 19,
                     lambda w, y, x: draw_df(w, y, x, __df_dev),
                     "df")
     # uptime
-    utime = Frame(3, 16, 0, 0, get_uptime, "uptime")
+    utime = Frame(3, 16, 1, 0, get_uptime, "uptime")
     # iotop
     __iostat_dev = "sda2"
-    iostat = ColorGeneratorFrame(4, 61, 16, 19,
+    iostat = ColorGeneratorFrame(4, 61, 18, 19,
                                  lambda w, y, x: draw_iostat(w, y, x,
                                                              __iostat_dev),
                                  "sda")
     # vnstat
     __nstat_dev = "wlp1s0"
-    nstat = ColorGeneratorFrame(4, 61, 12, 19,
+    nstat = ColorGeneratorFrame(4, 61, 14, 19,
                                 lambda w, y, x: draw_netstat(w, y, x,
                                                              __nstat_dev),
-                                "p6p1")
+                                __nstat_dev)
     # hddtem
     hddtemp = ColorFrame(6, 16, 12, 0,
                          lambda w, y, x: draw_hddtemp(w, y, x),
                          "hddtemp")
     # sensors
-    sensors = ColorFrame(3, 10, 20, 19, draw_sensors, "temp")
+    sensors = ColorFrame(3, 10, 22, 19, draw_sensors, "temp")
     # raidstatus
-    raid = ColorFrame(3, 45, 20, 35, draw_mdstat, "mdadm")
+    raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
     # smart status
     __smart_dev = ["/dev/sda"]
     smart = ColorFrame(7, 19, 18, 0,
                        lambda w, y, x: draw_smart(w, y, x, __smart_dev),
                        "SMART")
     # ip
-    ip = Frame(3, 42, 23, 38, lambda y, x: get_ip(y, x, "wlp1s0"), "ip")
+    ip = Frame(4, 42, 0, 38, lambda y, x: get_ip(y, x, "wlp1s0"), "ip")
     # uname
-    uname = Frame(3, 43, 0, 16, get_uname, "host")
+    uname = Frame(1, 38, 0, 0, get_uname)
     # vmstat/mem
-    memory = ColorFrame(4, 61, 3, 19, draw_memory, "mem")
+    memory = ColorFrame(4, 61, 4, 19, draw_memory, "mem")
     # virsh list
-    libvirt = Frame(4, 25, 7, 55, get_libvirt, "libvirt")
+    libvirt = Frame(8, 19, 4, 0, get_libvirt, "libvirt")
     # (ftp-status)
 
     def test_func(y, x):
@@ -721,8 +718,8 @@ def main(_):
             retval.append(line)
         return "\n".join(retval)
 
-    test = Frame(25, 80, 0, 0, test_func, "test")
-    test.update()
+    test = Frame(26, 81, 0, 0, test_func, "test")
+    # test.update()
     # time.sleep(5)
 
     performence = None
@@ -746,7 +743,7 @@ def main(_):
     while True:
         for frame in frames_low_frequency:
             frame.update()
-        for _ in xrange(30):
+        for _ in xrange(02):
             if performence:
                 performence.update()
             for frame in frames_high_frequency:
