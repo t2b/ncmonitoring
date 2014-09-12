@@ -3,6 +3,7 @@
 
 execfile("env/bin/activate_this.py", dict(__file__="env/bin/activate_this.py"))
 
+import urwid
 import curses
 import time
 import subprocess
@@ -411,7 +412,7 @@ def draw_sensors(window, height, width):
 
 
 def get_libvirt(heigth, width):
-    name_length = 15
+    name_length = width - 8
     output = check_output(["virsh", "list", "--all"])
     output = output.split("\n")
     output = output[2:]
@@ -664,6 +665,16 @@ def draw_smart(window, height, width, devices):
         line += 1
 
 
+def get_performence(height, width):
+    prev_time = time.time()
+    while True:
+        now = time.time()
+        delta = now - prev_time
+        prev_time = now
+        yield "\n".join(["%17.6f" % delta,
+                         "%17.6f" % now])
+
+
 def main(_):
     # load
     load = ColorFrame(3, 19, 1, 16, draw_load, "load")
@@ -723,7 +734,8 @@ def main(_):
     # time.sleep(5)
 
     performence = None
-    performence = Frame(1, 20, 25, 0, lambda y, x: "%17.6f" % time.time())
+    performence = GeneratorFrame(2, 20, 25, 0, get_performence)
+    # performence = Frame(1, 20, 25, 0, lambda y, x: "%17.6f" % time.time())
 
     frames_high_frequency = [date,
                              load,
@@ -732,18 +744,18 @@ def main(_):
                              memory]
     frames_low_frequency = [df,
                             utime,
-                            ip,
                             hddtemp,
                             sensors,
                             libvirt,
                             raid,
                             uname,
-                            smart]
+                            smart,
+                            ip]
 
     while True:
         for frame in frames_low_frequency:
             frame.update()
-        for _ in xrange(02):
+        for _ in xrange(3):
             if performence:
                 performence.update()
             for frame in frames_high_frequency:
@@ -752,6 +764,12 @@ def main(_):
 
 
 if __name__ == "__main__":
+    txt = urwid.Text(u"loading monitoring screen...", "center")
+    fill = urwid.Filler(txt, "middle")
+    loop = urwid.MainLoop(fill)
+    loop.screen.start()
+    loop.draw_screen()
+    time.sleep(1)
     # start
     stdscr = curses.initscr()
     # Keine Anzeige gedrückter Tasten
