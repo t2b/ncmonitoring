@@ -411,22 +411,30 @@ def draw_sensors(window, height, width):
     # return "CPU %5.1f°C" % (sensor["input"])
 
 
-def get_libvirt(heigth, width):
+def draw_libvirt(window, heigth, width):
     name_length = width - 8
     output = check_output(["virsh", "list", "--all"])
     output = output.split("\n")
     output = output[2:]
     ret_val = []
+    line_number = 0
     for line in output:
         line = line.split()
         if len(line) < 3:
             continue
         vm_name = line[1]
         vm_state = " ".join(line[2:])
-        format_string = "{:<%i} {:<8}" % name_length
-        vm = format_string.format(vm_name, vm_state)
-        ret_val.append(vm)
-    return "\n".join(ret_val)
+        vm_state = vm_state.strip()
+        window.addstr(line_number, 0, vm_name[:name_length])
+        color = color_red
+        if vm_state == "running":
+            color = color_green
+        if vm_state == "paused":
+            color = color_yellow
+        window.insstr(line_number, name_length, vm_state, color)
+        # format_string = "{:<%i} {:<8}" % name_length
+        # vm = format_string.format(vm_name, vm_state)
+        line_number += 1
 
 
 def draw_mdstat(window, heigth, width):
@@ -719,7 +727,8 @@ def main(_):
     # vmstat/mem
     memory = ColorFrame(4, 61, 4, 19, draw_memory, "mem")
     # virsh list
-    libvirt = Frame(8, 19, 4, 0, get_libvirt, "libvirt")
+    # libvirt = Frame(8, 19, 4, 0, get_libvirt, "libvirt")
+    libvirt = ColorFrame(8, 19, 4, 0, draw_libvirt, "libvirt")
     # (ftp-status)
 
     def test_func(y, x):
