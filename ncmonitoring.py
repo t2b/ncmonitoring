@@ -3,6 +3,7 @@
 
 execfile("env/bin/activate_this.py", dict(__file__="env/bin/activate_this.py"))
 
+import ConfigParser
 import urwid
 import curses
 import time
@@ -16,6 +17,13 @@ from srmqt4 import mdstat
 import psutil
 from natural import constant as natural_constant
 from natural import size as natural_size
+
+
+__IO_STAT_DEV = "sda"
+__SMART_DEV = ["/dev/sda"]
+__NET_STAT_DEV = "eth0"
+__DF_STAT_DEV = ["/"]
+__IP_DEV = "eth0"
 
 
 class Frame:
@@ -197,6 +205,7 @@ def draw_df(window, heigth, width, mountpoints=["/"]):
         mountname_length = int(width - 12) / 2
     else:
         mountname_length = 15
+    mountname_length = min(mountname_length, max(map(len, mountpoints)))
     graph_width = width - mountname_length - 3
 
     line = 0
@@ -416,7 +425,6 @@ def draw_libvirt(window, heigth, width):
     output = check_output(["virsh", "list", "--all"])
     output = output.split("\n")
     output = output[2:]
-    ret_val = []
     line_number = 0
     for line in output:
         line = line.split()
@@ -683,42 +691,55 @@ def get_performence(height, width):
                          "%17.6f" % now])
 
 
+def __get_config(configfile="config.cfg"):
+    config = ConfigParser.ConfigParser()
+    config.read(configfile)
+    global __DF_STAT_DEV
+    global __IO_STAT_DEV
+    global __NET_STAT_DEV
+    global __SMART_DEV
+    global __IP_DEV
+
+    __DF_STAT_DEV = config.get('monitoring', 'df').split(',')
+    __DF_STAT_DEV = map(str.strip, __DF_STAT_DEV)
+    __IO_STAT_DEV = config.get('monitoring', 'iostat')
+    __NET_STAT_DEV = config.get('monitoring', 'netstat')
+    __SMART_DEV = config.get('monitoring', 'smart').split(',')
+    __SMART_DEV = map(str.strip, __SMART_DEV)
+    __IP_DEV = config.get('monitoring', 'ip')
+
+
 def main(_):
+    __get_config()
     # load
     load = ColorFrame(3, 19, 1, 16, draw_load, "load")
     # date
     date = Frame(1, 19, 0, 61, get_date)
     # df
-    __df_dev = ["/", "/home", "/tmp"]
     df = ColorFrame(6, 61, 8, 19,
-                    lambda w, y, x: draw_df(w, y, x, __df_dev),
+                    lambda w, y, x: draw_df(w, y, x, __DF_STAT_DEV),
                     "df")
     # uptime
     utime = Frame(3, 16, 1, 0, get_uptime, "uptime")
     # iotop
-    __iostat_dev = "sda2"
     iostat = ColorGeneratorFrame(4, 61, 18, 19,
                                  lambda w, y, x: draw_iostat(w, y, x,
-                                                             __iostat_dev),
-                                 "sda")
+                                                             __IO_STAT_DEV),
+                                 __IO_STAT_DEV)
     # vnstat
-    __nstat_dev = "wlp1s0"
     nstat = ColorGeneratorFrame(4, 61, 14, 19,
                                 lambda w, y, x: draw_netstat(w, y, x,
-                                                             __nstat_dev),
-                                __nstat_dev)
+                                                             __NET_STAT_DEV),
+                                __NET_STAT_DEV)
     # hddtem
-    hddtemp = ColorFrame(6, 16, 12, 0,
-                         lambda w, y, x: draw_hddtemp(w, y, x),
-                         "hddtemp")
+    hddtemp = ColorFrame(6, 16, 12, 0, draw_hddtemp, "hddtemp")
     # sensors
     sensors = ColorFrame(3, 10, 22, 19, draw_sensors, "temp")
     # raidstatus
     raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
     # smart status
-    __smart_dev = ["/dev/sda"]
     smart = ColorFrame(7, 19, 18, 0,
-                       lambda w, y, x: draw_smart(w, y, x, __smart_dev),
+                       lambda w, y, x: draw_smart(w, y, x, __SMART_DEV),
                        "SMART")
     # ip
     ip = Frame(4, 42, 0, 38, lambda y, x: get_ip(y, x, "wlp1s0"), "ip")
@@ -727,7 +748,6 @@ def main(_):
     # vmstat/mem
     memory = ColorFrame(4, 61, 4, 19, draw_memory, "mem")
     # virsh list
-    # libvirt = Frame(8, 19, 4, 0, get_libvirt, "libvirt")
     libvirt = ColorFrame(8, 19, 4, 0, draw_libvirt, "libvirt")
     # (ftp-status)
 
@@ -738,13 +758,12 @@ def main(_):
             retval.append(line)
         return "\n".join(retval)
 
-    test = Frame(26, 81, 0, 0, test_func, "test")
+    # test = Frame(25, 80, 0, 0, test_func, "test")
     # test.update()
     # time.sleep(5)
 
     performence = None
     performence = GeneratorFrame(2, 20, 25, 0, get_performence)
-    # performence = Frame(1, 20, 25, 0, lambda y, x: "%17.6f" % time.time())
 
     frames_high_frequency = [date,
                              load,
