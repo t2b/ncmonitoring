@@ -742,7 +742,7 @@ def main(_):
                        lambda w, y, x: draw_smart(w, y, x, __SMART_DEV),
                        "SMART")
     # ip
-    ip = Frame(4, 42, 0, 38, lambda y, x: get_ip(y, x, "wlp1s0"), "ip")
+    ip = Frame(4, 42, 0, 38, lambda y, x: get_ip(y, x, __IP_DEV), "ip")
     # uname
     uname = Frame(1, 38, 0, 0, get_uname)
     # vmstat/mem
