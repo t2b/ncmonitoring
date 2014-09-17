@@ -141,11 +141,11 @@ def draw_load(window, height, width):
     load = list(map(float, load))
 
     for i in range(len(load)):
-        color = color_green
+        color = COLOR_GREEN
         if load[i] > 2:
-            color = color_yellow
+            color = COLOR_YELLOW
         if load[i] > 4:
-            color = color_red
+            color = COLOR_RED
         value = "%5.2f" % load[i]
         window.addstr(0, i * 6, value[-1:], color)
         window.insstr(0, i * 6, value[:-1], color)
@@ -173,16 +173,16 @@ def __draw_bar(window, pos_y, pos_x,
 
     window.addstr(pos_y,
                   pos_x,
-                  graph[:min(value, warning)], color_green)
+                  graph[:min(value, warning)], COLOR_GREEN)
     window.addstr(pos_y,
                   pos_x + warning,
-                  graph[min(value, warning):min(value, critical)], color_yellow)
+                  graph[min(value, warning):min(value, critical)], COLOR_YELLOW)
     window.addstr(pos_y,
                   pos_x + critical,
-                  graph[min(value, critical):value], color_red)
+                  graph[min(value, critical):value], COLOR_RED)
     window.addstr(pos_y,
                   pos_x + value,
-                  graph[value:], color_grey + curses.A_BOLD)
+                  graph[value:], COLOR_GREY + curses.A_BOLD)
 
 
 def pretty_size(value, suffix_format='decimal', digits=4):
@@ -276,7 +276,7 @@ def draw_hddtemp(window, heigth, width):
         output = telnet_conncection.read_all()
         telnet_conncection.close()
     except socket.error as error:
-        window.addstr(0, 0, str(error)[:heigth*width-1], color_warning)
+        window.addstr(0, 0, str(error)[:heigth*width-1], COLOR_WARNING)
         return
     seperator = '|'
     output = output.split(seperator * 2)
@@ -288,11 +288,11 @@ def draw_hddtemp(window, heigth, width):
         try:
             temp = float(hddtemp[2])
             if temp < 40:
-                color = color_green
+                color = COLOR_GREEN
             if 40 <= temp < 50:
-                color = color_yellow
+                color = COLOR_YELLOW
             if temp > 50:
-                color = color_red
+                color = COLOR_RED
         except ValueError:
             pass
         window.addstr(line, 0, hddtemp[0][-9:])
@@ -410,11 +410,11 @@ def draw_sensors(window, height, width):
         if line[:8] == "  temp1_":
             line = line.split(": ")
             sensor[line[0][8:]] = float(line[1])
-    color = color_green
+    color = COLOR_GREEN
     if sensor["input"] >= sensor["max"]:
-        color = color_yellow
+        color = COLOR_YELLOW
     if sensor["input"] >= sensor["crit"]:
-        color = color_red
+        color = COLOR_RED
     window.addstr(0, 0, "CPU")
     window.insstr(0, 4, "%3.0fC" % sensor["input"], color)
     # return "CPU %5.1f°C" % (sensor["input"])
@@ -434,11 +434,11 @@ def draw_libvirt(window, heigth, width):
         vm_state = " ".join(line[2:])
         vm_state = vm_state.strip()
         window.addstr(line_number, 0, vm_name[:name_length])
-        color = color_red
+        color = COLOR_RED
         if vm_state == "running":
-            color = color_green
+            color = COLOR_GREEN
         if vm_state == "paused":
-            color = color_yellow
+            color = COLOR_YELLOW
         window.insstr(line_number, name_length, vm_state, color)
         # format_string = "{:<%i} {:<8}" % name_length
         # vm = format_string.format(vm_name, vm_state)
@@ -585,9 +585,9 @@ def draw_mdstat(window, heigth, width):
         if active:
             active = "active"
 
-        color = color_default
+        color = COLOR_DEFAULT
         if degraded > 0:
-            color = color_warning
+            color = COLOR_WARNING
 
         main_status = "{:<5} {:<6} {:<6} {:<6} ".format(dev_name,
                                                         active,
@@ -597,8 +597,8 @@ def draw_mdstat(window, heigth, width):
 
         resyc_finish = resyc_finish.replace("min", "'")
         resync_status = "{:<7} {:>8}".format(resyc_type, resyc_finish)
-        if color == color_default:
-            color = color_yellow
+        if color == COLOR_DEFAULT:
+            color = COLOR_YELLOW
         window.insstr(line, 27, resync_status, color)
         line += 0
 
@@ -626,13 +626,13 @@ def draw_memory(window, heigth, width):
 
     window.addstr(0, 0, "mem  [")
     window.addstr(0, 6,
-                  memory_graph[:buffer_start], color_green)
+                  memory_graph[:buffer_start], COLOR_GREEN)
     window.addstr(0, 6 + buffer_start,
-                  memory_graph[buffer_start:cashed_start], color_blue)
+                  memory_graph[buffer_start:cashed_start], COLOR_BLUE)
     window.addstr(0, 6 + cashed_start,
-                  memory_graph[cashed_start:free_start], color_yellow)
+                  memory_graph[cashed_start:free_start], COLOR_YELLOW)
     window.addstr(0, 6 + free_start,
-                  memory_graph[free_start:], color_grey + curses.A_BOLD)
+                  memory_graph[free_start:], COLOR_GREY + curses.A_BOLD)
     window.insstr(0, width - 1, ']')
 
     swap = psutil.swap_memory()
@@ -671,11 +671,11 @@ def draw_smart(window, height, width, devices):
             status = output_line[1].strip()
             # print dev, status
         window.addstr(line, 0, dev)
-        color = color_red
+        color = COLOR_RED
         if status == "PASSED":
-            color = color_green
+            color = COLOR_GREEN
         if status == "UNKNOWN":
-            color = color_yellow
+            color = COLOR_YELLOW
         window.insstr(line, 10, status, color)
         # print dev, status
         line += 1
@@ -751,13 +751,13 @@ def main(_):
     libvirt = ColorFrame(8, 19, 4, 0, draw_libvirt, "libvirt")
     # (ftp-status)
 
-    def test_func(y, x):
-        line = "%" * x
-        retval = []
-        for _ in xrange(y):
-            retval.append(line)
-        return "\n".join(retval)
-
+    # def test_func(y, x):
+    #     line = "%" * x
+    #     retval = []
+    #     for _ in xrange(y):
+    #         retval.append(line)
+    #     return "\n".join(retval)
+    #
     # test = Frame(25, 80, 0, 0, test_func, "test")
     # test.update()
     # time.sleep(5)
@@ -808,25 +808,25 @@ if __name__ == "__main__":
     stdscr.keypad(True)
     curses.start_color()
 
-    color_default = curses.color_pair(0)
+    COLOR_DEFAULT = curses.color_pair(0)
 
     curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    color_green = curses.color_pair(1)
+    COLOR_GREEN = curses.color_pair(1)
 
     curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-    color_yellow = curses.color_pair(2)
+    COLOR_YELLOW = curses.color_pair(2)
 
     curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
-    color_red = curses.color_pair(3)
+    COLOR_RED = curses.color_pair(3)
 
     curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)
-    color_warning = curses.color_pair(4)
+    COLOR_WARNING = curses.color_pair(4)
 
     curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK)
-    color_blue = curses.color_pair(5)
+    COLOR_BLUE = curses.color_pair(5)
 
     curses.init_pair(6, curses.COLOR_BLACK + 8, curses.COLOR_BLACK)
-    color_grey = curses.color_pair(6)
+    COLOR_GREY = curses.color_pair(6)
 
     curses.wrapper(main)
 
