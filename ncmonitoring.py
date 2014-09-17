@@ -19,13 +19,6 @@ from natural import constant as natural_constant
 from natural import size as natural_size
 
 
-__IO_STAT_DEV = "sda"
-__SMART_DEV = ["/dev/sda"]
-__NET_STAT_DEV = "eth0"
-__DF_STAT_DEV = ["/"]
-__IP_DEV = "eth0"
-
-
 class Frame:
     _borderwindow = None
     _contentwindow = None
@@ -325,7 +318,7 @@ def __netstat(device):
         yield (rx_speed, tx_speed)
 
 
-def draw_netstat(window, height, width, device):
+def draw_netstat(window, height, width, device, max_rx, max_tx):
     netstat_generator = __netstat(device)
     graph_length = width - 8
     digits = 4
@@ -335,14 +328,14 @@ def draw_netstat(window, height, width, device):
         window.addstr(0, 0, "rx: [")
         __draw_bar(window, 0, 5,
                    graph_length,
-                   int(round(graph_length * rx_speed / 1024**3)),
+                   int(round(graph_length * rx_speed / max_rx)),
                    "".join(pretty_size(rx_speed, digits=digits)) + "it/s")
         window.insstr(0, 5 + graph_length, "]")
 
         window.addstr(1, 0, "tx: [")
         __draw_bar(window, 1, 5,
                    graph_length,
-                   int(round(graph_length * tx_speed / 1024**3)),
+                   int(round(graph_length * tx_speed / max_tx)),
                    "".join(pretty_size(tx_speed, digits=digits)) + "it/s")
         window.insstr(1, 5 + graph_length, "]")
         yield None
@@ -352,21 +345,11 @@ def __iostat(device):
     prev_timstamp = time.time()
 
     disk_io_counters = psutil.disk_io_counters(perdisk=True)
-    # with open(path.join(device, "stat")) as f:
-    #     output = f.read()
-    # output = output.split()
-    # prev_read = int(output[2])
-    # prev_write = int(output[6])
     prev_read = disk_io_counters[device].read_bytes
     prev_write = disk_io_counters[device].write_bytes
 
     while True:
         timestamp = time.time()
-        # with open(path.join(device, "stat")) as f:
-        #     output = f.read()
-        # output = output.split()
-        # read = int(output[2])
-        # write = int(output[6])
         disk_io_counters = psutil.disk_io_counters(perdisk=True)
         read = disk_io_counters[device].read_bytes
         write = disk_io_counters[device].write_bytes
@@ -378,7 +361,7 @@ def __iostat(device):
         yield (read_speed, write_speed)
 
 
-def draw_iostat(window, height, width, device):
+def draw_iostat(window, height, width, device, max_read, max_write):
     iostat_generator = __iostat(device)
     graph_length = width - 11
     digits = 4
@@ -388,14 +371,14 @@ def draw_iostat(window, height, width, device):
         window.addstr(0, 0, "read:  [")
         __draw_bar(window, 0, 8,
                    graph_length,
-                   int(round(graph_length * read_speed / 1024**2 / 100)),
+                   int(round(graph_length * read_speed / max_read)),
                    "".join(pretty_size(read_speed, digits=digits)) + "/s")
         window.insstr(0, 8 + graph_length, "]")
 
         window.addstr(1, 0, "write: [")
         __draw_bar(window, 1, 8,
                    graph_length,
-                   int(round(graph_length * write_speed / 1024**2 / 100)),
+                   int(round(graph_length * write_speed / max_write)),
                    "".join(pretty_size(write_speed, digits=digits)) + "/s")
         window.insstr(1, 8 + graph_length, "]")
         yield None
@@ -691,46 +674,68 @@ def get_performence(height, width):
                          "%17.6f" % now])
 
 
-def __get_config(configfile="config.cfg"):
-    config = ConfigParser.ConfigParser()
-    config.read(configfile)
-    global __DF_STAT_DEV
-    global __IO_STAT_DEV
-    global __NET_STAT_DEV
-    global __SMART_DEV
-    global __IP_DEV
+def config2dict(config):
+    config_dict = dict()
 
-    __DF_STAT_DEV = config.get('monitoring', 'df').split(',')
-    __DF_STAT_DEV = map(str.strip, __DF_STAT_DEV)
-    __IO_STAT_DEV = config.get('monitoring', 'iostat')
-    __NET_STAT_DEV = config.get('monitoring', 'netstat')
-    __SMART_DEV = config.get('monitoring', 'smart').split(',')
-    __SMART_DEV = map(str.strip, __SMART_DEV)
-    __IP_DEV = config.get('monitoring', 'ip')
+    for key, value in config:
+        config_dict[key] = value
+    return config_dict
 
 
 def main(_):
-    __get_config()
+    config = ConfigParser.ConfigParser()
+    config.read("config.cfg")
+
+    ip_config = config.items("ip")
+    ip_config = config2dict(ip_config)
+
+    netstat_config = config.items("netstat")
+    netstat_config = config2dict(netstat_config)
+    netstat_config["max_tx"] = float(netstat_config["max_tx"]) * 1000**2
+    netstat_config["max_rx"] = float(netstat_config["max_rx"]) * 1000**2
+
+    iostat_config = config.items("iostat")
+    iostat_config = config2dict(iostat_config)
+    iostat_config["max_read"] = float(iostat_config["max_read"]) * 1024**2
+    iostat_config["max_write"] = float(iostat_config["max_write"]) * 1024**2
+
+    diskusage_config = config.items("diskusage")
+    diskusage_config = config2dict(diskusage_config)
+    diskusage_config["devicelist"] = map(str.strip, diskusage_config["devicelist"].split(","))
+
+    smart_config = config.items("smart")
+    smart_config = config2dict(smart_config)
+    smart_config["devicelist"] = map(str.strip, smart_config["devicelist"].split(","))
+
     # load
     load = ColorFrame(3, 19, 1, 16, draw_load, "load")
     # date
     date = Frame(1, 19, 0, 61, get_date)
     # df
     df = ColorFrame(6, 61, 8, 19,
-                    lambda w, y, x: draw_df(w, y, x, __DF_STAT_DEV),
+                    lambda w, y, x: draw_df(w, y, x, diskusage_config["devicelist"]),
                     "df")
     # uptime
     utime = Frame(3, 16, 1, 0, get_uptime, "uptime")
     # iotop
+    def draw_iostat_(window, height, width):
+        return draw_iostat(window, height, width,
+                           iostat_config["device"],
+                           max_read=iostat_config["max_read"],
+                           max_write=iostat_config["max_write"])
+
     iostat = ColorGeneratorFrame(4, 61, 18, 19,
-                                 lambda w, y, x: draw_iostat(w, y, x,
-                                                             __IO_STAT_DEV),
-                                 __IO_STAT_DEV)
+                                 draw_iostat_,
+                                 iostat_config["device"])
     # vnstat
+    def draw_netstat_(window, height, width):
+        return draw_netstat(window, height, width,
+                            netstat_config["interface"],
+                            max_rx=netstat_config["max_rx"],
+                            max_tx=netstat_config["max_tx"])
+
     nstat = ColorGeneratorFrame(4, 61, 14, 19,
-                                lambda w, y, x: draw_netstat(w, y, x,
-                                                             __NET_STAT_DEV),
-                                __NET_STAT_DEV)
+                                draw_netstat_, netstat_config["interface"])
     # hddtem
     hddtemp = ColorFrame(6, 16, 12, 0, draw_hddtemp, "hddtemp")
     # sensors
@@ -739,10 +744,12 @@ def main(_):
     raid = ColorFrame(3, 45, 22, 35, draw_mdstat, "mdadm")
     # smart status
     smart = ColorFrame(7, 19, 18, 0,
-                       lambda w, y, x: draw_smart(w, y, x, __SMART_DEV),
+                       lambda w, y, x: draw_smart(w, y, x, smart_config["devicelist"]),
                        "SMART")
     # ip
-    ip = Frame(4, 42, 0, 38, lambda y, x: get_ip(y, x, __IP_DEV), "ip")
+    ip = Frame(4, 42, 0, 38,
+               lambda y, x: get_ip(y, x, ip_config["interface"]),
+               "ip")
     # uname
     uname = Frame(1, 38, 0, 0, get_uname)
     # vmstat/mem
@@ -798,6 +805,7 @@ if __name__ == "__main__":
     loop.screen.start()
     loop.draw_screen()
     time.sleep(1)
+
     # start
     stdscr = curses.initscr()
     # Keine Anzeige gedrückter Tasten
